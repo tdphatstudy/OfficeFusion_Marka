@@ -1,0 +1,21 @@
+{
+  "path": "cz-conventional-changelog",
+  "types": {
+    "feat":     { "description": "A new feature",                   "title": "✨ Features" },
+    "fix":      { "description": "A bug fix",                        "title": "🐛 Bug Fixes" },
+    "docs":     { "description": "Documentation changes",            "title": "📝 Docs" },
+    "style":    { "description": "Code style / formatting",          "title": "💅 Styles" },
+    "refactor": { "description": "Refactoring (no feat/fix)",        "title": "♻️ Refactor" },
+    "perf":     { "description": "Performance improvement",          "title": "⚡ Performance" },
+    "test":     { "description": "Add/update tests",                 "title": "✅ Tests" },
+    "chore":    { "description": "Maintenance, tooling, deps",       "title": "🔧 Chores" },
+    "build":    { "description": "Build system / packaging changes",  "title": "📦 Build" },
+    "ci":       { "description": "CI/CD changes",                    "title": "🤖 CI" },
+    "revert":   { "description": "Revert a commit",                  "title": "⏪ Reverts" }
+  },
+  "scopes": [
+    "editor", "preview", "ipc", "ui", "store", "config",
+    "deps", "export", "theme", "menu", "toolbar", "sidebar",
+    "release", "docs"
+  ]
+}

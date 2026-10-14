@@ -1,0 +1,81 @@
+# ==========================================
+# OfficeFusion Marka — .gitignore
+# ==========================================
+
+# --- AI Context & Planning (private) ---
+docs/
+planning/
+.ai-context/
+
+# --- Dependencies ---
+node_modules/
+.pnp
+.pnp.js
+
+# --- Build output ---
+out/
+dist/
+build/mac/
+build/linux/
+build/win-unpacked/
+*.app/
+*.dmg
+*.exe
+*.deb
+*.rpm
+*.AppImage
+*.snap
+*.zip
+*.tsbuildinfo
+
+# --- electron-vite cache ---
+.vite/
+
+# --- Environment variables ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
+
+# --- IDE ---
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- OS ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Testing ---
+coverage/
+.nyc_output/
+
+# --- Misc ---
+*.tgz
+*.tar.gz
+.cache/
+tmp/
+temp/
