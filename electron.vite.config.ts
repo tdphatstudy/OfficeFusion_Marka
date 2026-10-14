@@ -25,8 +25,26 @@ export default defineConfig({
   renderer: {
     root: 'src/renderer',
     build: {
+      sourcemap: false,
+      minify: 'esbuild',
       rollupOptions: {
-        input: resolve(__dirname, 'src/renderer/index.html')
+        input: resolve(__dirname, 'src/renderer/index.html'),
+        output: {
+          manualChunks: {
+            'vendor-tiptap': [
+              '@tiptap/core',
+              '@tiptap/react',
+              '@tiptap/starter-kit',
+              'tiptap-markdown'
+            ],
+            'vendor-codemirror': [
+              '@codemirror/state',
+              '@codemirror/view',
+              '@codemirror/language',
+              '@codemirror/lang-markdown'
+            ]
+          }
+        }
       }
     },
     resolve: {

@@ -4,6 +4,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Heading4,
   List,
   ListOrdered,
   CheckSquare,
@@ -12,7 +13,16 @@ import {
   Minus,
   Table as TableIcon,
   AlertCircle,
-  Type
+  AlertTriangle,
+  Lightbulb,
+  Flame,
+  Type,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Image as ImageIcon,
+  Eraser
 } from 'lucide-react'
 
 export interface CommandItem {
@@ -61,6 +71,15 @@ export const slashCommands: CommandItem[] = [
     }
   },
   {
+    title: 'Heading 4',
+    description: 'Sub-subsection heading',
+    icon: Heading4,
+    keywords: ['h4', 'heading4', 'minor', 'sub'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().toggleHeading({ level: 4 }).run()
+    }
+  },
+  {
     title: 'Bullet List',
     description: 'Standard bulleted list',
     icon: List,
@@ -88,21 +107,48 @@ export const slashCommands: CommandItem[] = [
     }
   },
   {
-    title: 'Callout',
-    description: 'Highlight important information in a box',
-    icon: AlertCircle,
-    keywords: ['callout', 'admonition', 'note', 'alert', 'warning', 'tip'],
-    command: (editor: Editor): void => {
-      editor.chain().focus().setCallout().run()
-    }
-  },
-  {
     title: 'Table',
     description: 'Insert a 3x3 interactive table',
     icon: TableIcon,
     keywords: ['table', 'grid', 'columns', 'rows'],
     command: (editor: Editor): void => {
       editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+    }
+  },
+  {
+    title: 'Callout (Info)',
+    description: 'Blue informational callout box',
+    icon: AlertCircle,
+    keywords: ['callout', 'info', 'note', 'admonition'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().setCallout({ type: 'info' }).run()
+    }
+  },
+  {
+    title: 'Callout (Tip)',
+    description: 'Green helpful tip callout box',
+    icon: Lightbulb,
+    keywords: ['tip', 'success', 'hint', 'callout'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().setCallout({ type: 'tip' }).run()
+    }
+  },
+  {
+    title: 'Callout (Warning)',
+    description: 'Amber warning attention box',
+    icon: AlertTriangle,
+    keywords: ['warning', 'caution', 'alert', 'callout'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().setCallout({ type: 'warning' }).run()
+    }
+  },
+  {
+    title: 'Callout (Danger)',
+    description: 'Red critical danger box',
+    icon: Flame,
+    keywords: ['danger', 'error', 'critical', 'callout'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().setCallout({ type: 'danger' }).run()
     }
   },
   {
@@ -130,6 +176,67 @@ export const slashCommands: CommandItem[] = [
     keywords: ['divider', 'hr', 'horizontal', 'line', 'separator'],
     command: (editor: Editor): void => {
       editor.chain().focus().setHorizontalRule().run()
+    }
+  },
+  {
+    title: 'Image Sample',
+    description: 'Insert an image placeholder',
+    icon: ImageIcon,
+    keywords: ['image', 'photo', 'picture', 'img'],
+    command: (editor: Editor): void => {
+      editor
+        .chain()
+        .focus()
+        .setImage({
+          src: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop',
+          alt: 'Placeholder Image'
+        })
+        .run()
+    }
+  },
+  {
+    title: 'Align Left',
+    description: 'Align text to the left',
+    icon: AlignLeft,
+    keywords: ['align', 'left', 'text'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().setTextAlign('left').run()
+    }
+  },
+  {
+    title: 'Align Center',
+    description: 'Center align current block',
+    icon: AlignCenter,
+    keywords: ['align', 'center', 'middle'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().setTextAlign('center').run()
+    }
+  },
+  {
+    title: 'Align Right',
+    description: 'Align text to the right',
+    icon: AlignRight,
+    keywords: ['align', 'right'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().setTextAlign('right').run()
+    }
+  },
+  {
+    title: 'Justify Text',
+    description: 'Justify text alignment',
+    icon: AlignJustify,
+    keywords: ['justify', 'align', 'full'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().setTextAlign('justify').run()
+    }
+  },
+  {
+    title: 'Clear Formatting',
+    description: 'Clear all inline marks and styles',
+    icon: Eraser,
+    keywords: ['clear', 'remove', 'format', 'reset'],
+    command: (editor: Editor): void => {
+      editor.chain().focus().unsetAllMarks().clearNodes().run()
     }
   }
 ]

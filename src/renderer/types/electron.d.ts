@@ -7,6 +7,9 @@ export interface ElectronAPI {
   minimize: () => void
   maximize: () => void
   close: () => void
+  exportPdf: (htmlContent: string) => Promise<string | null>
+  exportHtml: (htmlContent: string) => Promise<string | null>
+  exportTxt: (textContent: string) => Promise<string | null>
 }
 
 declare global {

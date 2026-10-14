@@ -1,17 +1,19 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Menu } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
+  const isMac = process.platform === 'darwin'
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     show: false,
-    autoHideMenuBar: false,
-    titleBarStyle: 'hiddenInset',
+    frame: isMac,
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    autoHideMenuBar: true,
     ...(process.platform === 'linux' || process.platform === 'win32'
       ? { icon: join(__dirname, '../../resources/icon.png') }
       : {}),
@@ -19,9 +21,13 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      spellcheck: false,
+      backgroundThrottling: true
     }
   })
+
+  mainWindow.setMenu(null)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -41,6 +47,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.officefusion.marka')
+  Menu.setApplicationMenu(null)
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

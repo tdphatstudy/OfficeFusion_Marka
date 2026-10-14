@@ -24,7 +24,13 @@ const api = {
   },
   close: (): void => {
     ipcRenderer.send('window:close')
-  }
+  },
+  exportPdf: (htmlContent: string): Promise<string | null> =>
+    ipcRenderer.invoke('export:pdf', htmlContent),
+  exportHtml: (htmlContent: string): Promise<string | null> =>
+    ipcRenderer.invoke('export:html', htmlContent),
+  exportTxt: (textContent: string): Promise<string | null> =>
+    ipcRenderer.invoke('export:txt', textContent)
 }
 
 if (process.contextIsolated) {

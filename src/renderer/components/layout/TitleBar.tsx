@@ -8,15 +8,18 @@ import {
   PenTool,
   Code2,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ListTree
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEditorStore } from '@/stores/editorStore'
+import { useUIStore } from '@/stores/uiStore'
 import { useFileActions } from '@/hooks/useFileActions'
 import { Button, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui'
 
 const TitleBar: FC = () => {
   const { fileName, isDirty, viewMode, setViewMode, config, toggleFullWidth } = useEditorStore()
+  const { sidebarOpen, toggleSidebar } = useUIStore()
   const { open, save } = useFileActions()
   const isMac = navigator.userAgent.includes('Mac')
 
@@ -114,9 +117,30 @@ const TitleBar: FC = () => {
             {config.fullWidth ? 'Constrain Page Width' : 'Full Width Canvas'}
           </TooltipContent>
         </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className={cn(
+                'flex h-6 w-6 items-center justify-center rounded text-text-secondary hover:bg-surface hover:text-text-primary',
+                sidebarOpen && 'bg-surface text-accent'
+              )}
+            >
+              <ListTree size={12} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {sidebarOpen ? 'Hide Outline & Stats' : 'Show Outline & Stats'}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
-      <div className="flex items-center gap-1.5 text-xs">
+      <div className="flex items-center gap-2 text-xs">
+        <div className="flex h-4 w-4 items-center justify-center rounded bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 shadow-xs">
+          <div className="h-1.5 w-1.5 rotate-45 rounded-xs bg-white" />
+        </div>
         <span className="font-medium text-text-primary">
           {isDirty ? '● ' : ''}
           {fileName}

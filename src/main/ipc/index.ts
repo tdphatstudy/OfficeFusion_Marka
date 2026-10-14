@@ -62,6 +62,85 @@ export function registerIpcHandlers(): void {
     return await readFile(filePath, 'utf-8')
   })
 
+  ipcMain.handle('export:pdf', async (_, htmlContent: string) => {
+    const window = BrowserWindow.getFocusedWindow()
+    const options = {
+      title: 'Export Document to PDF',
+      defaultPath: 'Document.pdf',
+      filters: [{ name: 'PDF Documents', extensions: ['pdf'] }]
+    }
+    const result = window
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options)
+
+    if (result.canceled || !result.filePath) {
+      return null
+    }
+
+    const printWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    })
+
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`)
+    const pdfData = await printWindow.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      margins: {
+        marginType: 'custom',
+        top: 0.75,
+        bottom: 0.75,
+        left: 0.75,
+        right: 0.75
+      }
+    })
+    printWindow.destroy()
+
+    await writeFile(result.filePath, pdfData)
+    return result.filePath
+  })
+
+  ipcMain.handle('export:html', async (_, htmlContent: string) => {
+    const window = BrowserWindow.getFocusedWindow()
+    const options = {
+      title: 'Export Document to HTML',
+      defaultPath: 'Document.html',
+      filters: [{ name: 'HTML Document', extensions: ['html', 'htm'] }]
+    }
+    const result = window
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options)
+
+    if (result.canceled || !result.filePath) {
+      return null
+    }
+
+    await writeFile(result.filePath, htmlContent, 'utf-8')
+    return result.filePath
+  })
+
+  ipcMain.handle('export:txt', async (_, textContent: string) => {
+    const window = BrowserWindow.getFocusedWindow()
+    const options = {
+      title: 'Export Document to Plain Text',
+      defaultPath: 'Document.txt',
+      filters: [{ name: 'Text Document', extensions: ['txt'] }]
+    }
+    const result = window
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options)
+
+    if (result.canceled || !result.filePath) {
+      return null
+    }
+
+    await writeFile(result.filePath, textContent, 'utf-8')
+    return result.filePath
+  })
+
   ipcMain.on('window:minimize', event => {
     const window = BrowserWindow.fromWebContents(event.sender)
     window?.minimize()

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { CommandItem } from './slashCommands'
 import { cn } from '@/lib/utils'
 
@@ -14,10 +14,21 @@ interface SlashCommandMenuProps {
 export const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenuProps>(
   ({ items, command }, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0)
+    const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
 
     useEffect(() => {
       setSelectedIndex(0)
     }, [items])
+
+    useEffect(() => {
+      const activeEl = itemRefs.current[selectedIndex]
+      if (activeEl) {
+        activeEl.scrollIntoView({
+          block: 'nearest',
+          behavior: 'smooth'
+        })
+      }
+    }, [selectedIndex])
 
     const selectItem = (index: number): void => {
       const item = items[index]
@@ -71,6 +82,9 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenu
             return (
               <button
                 key={item.title}
+                ref={el => {
+                  itemRefs.current[index] = el
+                }}
                 type="button"
                 onClick={(): void => selectItem(index)}
                 className={cn(
