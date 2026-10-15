@@ -10,6 +10,8 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "test": "node scripts/test.mjs",
+    "test:smoke": "node scripts/smoke-electron.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -133,6 +135,7 @@
     "eslint-plugin-react-refresh": "^0.4.18",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
+    "playwright": "1.62.1",
     "png-to-ico": "^3.0.2",
     "postcss": "^8.5.1",
     "prettier": "^3.4.2",

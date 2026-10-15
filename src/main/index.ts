@@ -28,14 +28,56 @@ function createWindow(): void {
   })
 
   mainWindow.setMenu(null)
+  let closeApproved = false
+  let closeGuardReady = false
+  mainWindow.on('close', event => {
+    if (!closeApproved && closeGuardReady && !mainWindow.webContents.isDestroyed()) {
+      event.preventDefault()
+      mainWindow.webContents.send('window:closeRequested')
+    }
+  })
+  const approveClose = (event: Electron.IpcMainEvent): void => {
+    if (event.sender === mainWindow.webContents) {
+      closeApproved = true
+      mainWindow.close()
+    }
+  }
+  ipcMain.on('window:confirmClose', approveClose)
+  const updateCloseGuard = (event: Electron.IpcMainEvent, ready: boolean): void => {
+    if (event.sender === mainWindow.webContents) {
+      closeGuardReady = ready === true
+    }
+  }
+  ipcMain.on('window:closeGuardReady', updateCloseGuard)
+  mainWindow.webContents.on('render-process-gone', () => {
+    closeGuardReady = false
+  })
+  mainWindow.webContents.on('did-start-loading', () => {
+    closeGuardReady = false
+  })
+  mainWindow.on('closed', () => {
+    ipcMain.removeListener('window:confirmClose', approveClose)
+    ipcMain.removeListener('window:closeGuardReady', updateCloseGuard)
+  })
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler(details => {
-    shell.openExternal(details.url)
+    if (/^https?:|^mailto:/i.test(details.url)) {
+      void shell.openExternal(details.url)
+    }
     return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) {
+      event.preventDefault()
+      if (/^https?:|^mailto:/i.test(url)) {
+        void shell.openExternal(url)
+      }
+    }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

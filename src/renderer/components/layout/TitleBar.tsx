@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import * as Menu from '@radix-ui/react-dropdown-menu'
 import {
   Minus,
   Square,
@@ -7,181 +8,257 @@ import {
   Save,
   PenTool,
   Code2,
-  Maximize2,
-  Minimize2,
-  ListTree
+  Columns2,
+  ListTree,
+  Search,
+  Settings2,
+  Focus,
+  ChevronDown,
+  Maximize2
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
-import { useFileActions } from '@/hooks/useFileActions'
-import { Button, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui'
+import { fileActions } from '@/lib/fileActions'
+import { changeViewMode } from '@/lib/commands'
+import { exportDocument } from '@/lib/exportDocument'
+import { cn } from '@/lib/utils'
 
 const TitleBar: FC = () => {
-  const { fileName, isDirty, viewMode, setViewMode, config, toggleFullWidth } = useEditorStore()
-  const { sidebarOpen, toggleSidebar } = useUIStore()
-  const { open, save } = useFileActions()
+  const fileName = useEditorStore(state => state.fileName)
+  const isDirty = useEditorStore(state => state.isDirty)
+  const viewMode = useEditorStore(state => state.viewMode)
+  const fullWidth = useEditorStore(state => state.config.fullWidth)
+  const sidebarOpen = useUIStore(state => state.sidebarOpen)
+  const focusMode = useUIStore(state => state.focusMode)
+  const fileBusy = useUIStore(state => state.fileBusy)
   const isMac = navigator.userAgent.includes('Mac')
+  const ui = useUIStore.getState()
 
   return (
-    <div
+    <header
       className={cn(
-        'drag-region flex h-10 items-center justify-between border-b border-border bg-surface-raised px-2',
-        isMac ? 'pl-20' : 'pl-2'
+        'drag-region flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-3',
+        isMac && 'pl-20'
       )}
     >
+      <Menu.Root>
+        <Menu.Trigger
+          className="no-drag flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold hover:bg-surface-overlay"
+          aria-label="File menu"
+        >
+          <span className="text-accent">Marka</span>
+          <ChevronDown size={12} />
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Content className="menu-content" sideOffset={8}>
+            <Menu.Item
+              disabled={fileBusy}
+              className="menu-item"
+              onSelect={() => {
+                void fileActions.newDocument()
+              }}
+            >
+              New document<kbd>Ctrl N</kbd>
+            </Menu.Item>
+            <Menu.Item
+              disabled={fileBusy}
+              className="menu-item"
+              onSelect={() => {
+                void fileActions.open()
+              }}
+            >
+              Open file…<kbd>Ctrl O</kbd>
+            </Menu.Item>
+            <Menu.Item
+              disabled={fileBusy}
+              className="menu-item"
+              onSelect={() => {
+                void fileActions.save()
+              }}
+            >
+              Save<kbd>Ctrl S</kbd>
+            </Menu.Item>
+            <Menu.Item
+              disabled={fileBusy}
+              className="menu-item"
+              onSelect={() => {
+                void fileActions.saveAs()
+              }}
+            >
+              Save as…<kbd>Ctrl Shift S</kbd>
+            </Menu.Item>
+            <Menu.Separator className="my-1 h-px bg-border" />
+            <Menu.Item
+              className="menu-item"
+              onSelect={() => {
+                void exportDocument('pdf')
+              }}
+            >
+              Export PDF
+            </Menu.Item>
+            <Menu.Item
+              className="menu-item"
+              onSelect={() => {
+                void exportDocument('html')
+              }}
+            >
+              Export HTML
+            </Menu.Item>
+            <Menu.Item
+              className="menu-item"
+              onSelect={() => {
+                void exportDocument('txt')
+              }}
+            >
+              Export plain text
+            </Menu.Item>
+          </Menu.Content>
+        </Menu.Portal>
+      </Menu.Root>
       <div className="no-drag flex items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={open}
-              className="h-7 gap-1 px-2 text-xs text-text-secondary hover:text-text-primary"
-            >
-              <FolderOpen size={13} />
-              <span>Open</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Open Markdown file</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={save}
-              className="h-7 gap-1 px-2 text-xs text-text-secondary hover:text-text-primary"
-            >
-              <Save size={13} />
-              <span>Save</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Save changes</TooltipContent>
-        </Tooltip>
-
-        <div className="mx-1 h-3.5 w-px bg-border" />
-
-        <div className="flex items-center rounded-md border border-border bg-surface p-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={(): void => setViewMode('rich')}
-                className={cn(
-                  'flex h-6 items-center gap-1 rounded px-2 text-[11px] font-medium transition-colors',
-                  viewMode === 'rich'
-                    ? 'bg-accent text-white shadow-xs'
-                    : 'text-text-secondary hover:text-text-primary'
-                )}
-              >
-                <PenTool size={11} />
-                <span>Rich</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Notion-style Rich Block Editor</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={(): void => setViewMode('source')}
-                className={cn(
-                  'flex h-6 items-center gap-1 rounded px-2 text-[11px] font-medium transition-colors',
-                  viewMode === 'source'
-                    ? 'bg-accent text-white shadow-xs'
-                    : 'text-text-secondary hover:text-text-primary'
-                )}
-              >
-                <Code2 size={11} />
-                <span>Source</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Raw Markdown Source</TooltipContent>
-          </Tooltip>
-        </div>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="icon-button"
+          disabled={fileBusy}
+          onClick={() => {
+            void fileActions.open()
+          }}
+          aria-label="Open file"
+          title="Open file (Ctrl+O)"
+        >
+          <FolderOpen size={16} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          disabled={fileBusy}
+          onClick={() => {
+            void fileActions.save()
+          }}
+          aria-label="Save document"
+          title="Save (Ctrl+S)"
+        >
+          <Save size={16} />
+        </button>
+      </div>
+      <div
+        className="min-w-0 flex-1 truncate px-2 text-center text-xs font-medium"
+        title={fileName}
+      >
+        <span className={isDirty ? 'text-accent' : 'text-text-muted'}>{isDirty ? '● ' : ''}</span>
+        {fileName}
+      </div>
+      <div className="no-drag flex items-center gap-1">
+        <div
+          role="group"
+          aria-label="Editor view"
+          className="mr-2 flex rounded-lg border border-border bg-surface p-1"
+        >
+          {(
+            [
+              { mode: 'rich', label: 'Rich', icon: PenTool },
+              { mode: 'source', label: 'Source', icon: Code2 },
+              { mode: 'split', label: 'Split', icon: Columns2 }
+            ] as const
+          ).map(item => (
             <button
+              key={item.mode}
               type="button"
-              onClick={toggleFullWidth}
-              className="flex h-6 w-6 items-center justify-center rounded text-text-secondary hover:bg-surface hover:text-text-primary"
-            >
-              {config.fullWidth ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {config.fullWidth ? 'Constrain Page Width' : 'Full Width Canvas'}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleSidebar}
+              onClick={() => changeViewMode(item.mode)}
+              aria-label={item.label}
+              aria-pressed={viewMode === item.mode}
               className={cn(
-                'flex h-6 w-6 items-center justify-center rounded text-text-secondary hover:bg-surface hover:text-text-primary',
-                sidebarOpen && 'bg-surface text-accent'
+                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                viewMode === item.mode
+                  ? 'bg-accent/10 font-semibold text-accent'
+                  : 'text-text-secondary hover:bg-surface-raised'
               )}
             >
-              <ListTree size={12} />
+              <item.icon size={13} />
+              <span className="hidden min-[1000px]:inline">{item.label}</span>
             </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {sidebarOpen ? 'Hide Outline & Stats' : 'Show Outline & Stats'}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
-      <div className="flex items-center gap-2 text-xs">
-        <div className="flex h-4 w-4 items-center justify-center rounded bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 shadow-xs">
-          <div className="h-1.5 w-1.5 rotate-45 rounded-xs bg-white" />
+          ))}
         </div>
-        <span className="font-medium text-text-primary">
-          {isDirty ? '● ' : ''}
-          {fileName}
-        </span>
-        <span className="text-[11px] text-text-muted">— Marka</span>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Toggle outline"
+          aria-pressed={sidebarOpen && !focusMode}
+          onClick={ui.toggleSidebar}
+          title="Toggle outline"
+        >
+          <ListTree size={16} />
+        </button>
+        <button
+          type="button"
+          className="icon-button hidden min-[1000px]:flex"
+          aria-label="Toggle page width"
+          disabled={viewMode !== 'rich'}
+          aria-pressed={fullWidth}
+          onClick={useEditorStore.getState().toggleFullWidth}
+          title="Toggle page width"
+        >
+          <Maximize2 size={15} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Toggle focus mode"
+          aria-pressed={focusMode}
+          onClick={ui.toggleFocusMode}
+          title="Focus mode (Ctrl+Shift+F)"
+        >
+          <Focus size={16} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Editor settings"
+          onClick={() => ui.setSettingsOpen(true)}
+          title="Settings (Ctrl+,)"
+        >
+          <Settings2 size={16} />
+        </button>
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text-secondary hover:text-accent"
+          aria-label="Open commands"
+          onClick={() => ui.setCommandOpen(true)}
+          title="Commands (Ctrl+K)"
+        >
+          <Search size={14} />
+          <span className="hidden min-[1100px]:inline">Commands</span>
+        </button>
       </div>
-
-      {!isMac ? (
-        <div className="no-drag flex items-center">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-10 rounded-none text-text-muted hover:bg-surface-overlay"
-            onClick={(): void => window.api.minimize()}
+      {!isMac && (
+        <div className="no-drag ml-1 flex items-center border-l border-border pl-1">
+          <button
+            type="button"
+            className="window-button"
+            onClick={() => window.api.minimize()}
             aria-label="Minimize"
           >
-            <Minus size={13} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-10 rounded-none text-text-muted hover:bg-surface-overlay"
-            onClick={(): void => window.api.maximize()}
+            <Minus size={14} />
+          </button>
+          <button
+            type="button"
+            className="window-button"
+            onClick={() => window.api.maximize()}
             aria-label="Maximize"
           >
             <Square size={12} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-10 rounded-none text-text-muted hover:bg-red-600 hover:text-white"
-            onClick={(): void => window.api.close()}
+          </button>
+          <button
+            type="button"
+            className="window-button"
+            onClick={() => window.api.close()}
             aria-label="Close"
           >
-            <X size={13} />
-          </Button>
+            <X size={15} />
+          </button>
         </div>
-      ) : (
-        <div className="w-16" />
       )}
-    </div>
+    </header>
   )
 }
 

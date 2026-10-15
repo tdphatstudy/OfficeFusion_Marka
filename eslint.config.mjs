@@ -40,6 +40,7 @@ export default tseslint.config(
       '**/out/**',
       '**/dist/**',
       '**/.vite/**',
+      '**/tmp/**',
       'scripts/**',
       '*.config.*'
     ]

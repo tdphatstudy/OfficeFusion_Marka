@@ -1,162 +1,100 @@
-import { useMemo, type FC } from 'react'
-import { ListTree, FileText, Clock, Hash, ChevronLeft, BookOpen } from 'lucide-react'
+import { useDeferredValue, useMemo, type FC } from 'react'
+import { ListTree, ChevronLeft, FileText, Search } from 'lucide-react'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
-import { ScrollArea } from '@/components/ui'
-import { cn } from '@/lib/utils'
-
-interface HeadingItem {
-  level: number
-  text: string
-  index: number
-}
+import { countWords, getHeadings } from '@/lib/utils/markdown'
+import { navigateToHeading } from '@/lib/editorNavigation'
+import { findInDocument } from '@/lib/commands'
 
 const Sidebar: FC = () => {
-  const { content, fileName } = useEditorStore()
-  const { toggleSidebar } = useUIStore()
-
-  const headings = useMemo<HeadingItem[]>(() => {
-    const lines = content.split('\n')
-    const result: HeadingItem[] = []
-    let hIndex = 0
-
-    for (const line of lines) {
-      const match = line.match(/^(#{1,4})\s+(.+)$/)
-      if (match && match[1] && match[2]) {
-        result.push({
-          level: match[1].length,
-          text: match[2].trim(),
-          index: hIndex++
-        })
-      }
-    }
-
-    return result
-  }, [content])
-
-  const stats = useMemo(() => {
-    const trimmed = content.trim()
-    const words = trimmed ? (trimmed.match(/\S+/g) || []).length : 0
-    const characters = content.length
-    const readingTime = Math.max(1, Math.ceil(words / 200))
-    const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim().length > 0).length
-
-    return {
-      words,
-      characters,
-      readingTime,
-      paragraphs
-    }
-  }, [content])
-
-  const scrollToHeading = (index: number): void => {
-    const elements = document.querySelectorAll(
-      '.tiptap h1, .tiptap h2, .tiptap h3, .tiptap h4, .cm-editor .cm-line'
-    )
-    const target = elements[index]
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
+  const content = useEditorStore(state => state.content)
+  const fileName = useEditorStore(state => state.fileName)
+  const filePath = useEditorStore(state => state.filePath)
+  const deferredContent = useDeferredValue(content)
+  const headings = useMemo(() => getHeadings(deferredContent), [deferredContent])
+  const words = useMemo(() => countWords(deferredContent), [deferredContent])
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface-raised select-none">
-      <div className="flex h-10 items-center justify-between border-b border-border px-3">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
-          <ListTree size={14} className="text-accent" />
-          <span>Outline & Details</span>
-        </div>
+    <aside
+      aria-label="Document outline and details"
+      className="flex h-full w-56 shrink-0 flex-col border-r border-border bg-surface-raised select-none"
+    >
+      <div className="flex h-12 shrink-0 items-center justify-between px-4">
+        <span className="flex items-center gap-2 text-xs font-semibold">
+          <ListTree size={15} className="text-accent" />
+          Document
+        </span>
         <button
           type="button"
-          onClick={toggleSidebar}
-          className="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-surface-overlay hover:text-text-primary"
-          title="Close Outline"
+          aria-label="Hide outline"
+          className="icon-button"
+          onClick={useUIStore.getState().toggleSidebar}
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft size={15} />
         </button>
       </div>
-
-      <ScrollArea className="flex-1">
-        <div className="p-3">
-          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-text-muted uppercase">
-            <BookOpen size={12} />
-            <span>Document Outline</span>
+      <div className="mx-3 rounded-lg border border-border bg-surface p-3">
+        <div className="flex items-center gap-2">
+          <FileText size={14} className="shrink-0 text-accent" />
+          <span className="truncate text-xs font-medium" title={fileName}>
+            {fileName}
+          </span>
+        </div>
+        <p className="mt-2 truncate text-[11px] text-text-muted" title={filePath ?? undefined}>
+          {filePath ?? 'Local draft · save to choose a location'}
+        </p>
+      </div>
+      <button
+        type="button"
+        className="mx-3 mt-3 flex items-center gap-2 rounded-md px-2 py-2 text-xs text-text-secondary hover:bg-surface-overlay"
+        onClick={findInDocument}
+      >
+        <Search size={14} />
+        Find in document{' '}
+        <kbd className="ml-auto text-[10px]">
+          {navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'} F
+        </kbd>
+      </button>
+      <div className="px-5 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+        Outline <span className="float-right">{headings.length}</span>
+      </div>
+      <nav aria-label="Document headings" className="min-h-0 flex-1 overflow-auto px-3 pb-3">
+        {headings.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-4 text-xs text-text-muted">
+            <p>No sections yet</p>
+            <p className="mt-2 leading-relaxed">
+              Add a heading with # or the block menu to navigate your document.
+            </p>
           </div>
-
-          {headings.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border p-3 text-center text-xs text-text-muted">
-              <p>No headings yet</p>
-              <p className="mt-1 text-[11px]">Use # or slash command to add sections</p>
-            </div>
-          ) : (
-            <nav className="space-y-0.5">
-              {headings.map(h => (
-                <button
-                  key={`${h.index}-${h.text}`}
-                  type="button"
-                  onClick={(): void => scrollToHeading(h.index)}
-                  className={cn(
-                    'group flex w-full items-center truncate rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-overlay hover:text-accent',
-                    h.level === 1 && 'font-semibold text-text-primary text-xs',
-                    h.level === 2 && 'pl-4 text-xs font-medium text-text-secondary',
-                    h.level === 3 && 'pl-6 text-[11px] text-text-muted',
-                    h.level === 4 && 'pl-8 text-[11px] text-text-muted'
-                  )}
-                  title={h.text}
-                >
-                  <span className="mr-1.5 text-[10px] text-text-muted group-hover:text-accent">
-                    {'#'.repeat(h.level)}
-                  </span>
-                  <span className="truncate">{h.text}</span>
-                </button>
-              ))}
-            </nav>
-          )}
-
-          <div className="my-4 border-t border-border" />
-
-          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-text-muted uppercase">
-            <FileText size={12} />
-            <span>Statistics</span>
+        ) : (
+          headings.map(heading => (
+            <button
+              key={`${heading.line}-${heading.index}`}
+              type="button"
+              onClick={() => navigateToHeading(heading.line, heading.index)}
+              className="my-0.5 flex w-full items-center gap-2 rounded-md py-2 pr-2 text-left text-xs text-text-secondary hover:bg-surface-overlay hover:text-accent"
+              style={{ paddingLeft: 8 + (heading.level - 1) * 12 }}
+              title={heading.text}
+            >
+              <span className="shrink-0 text-[10px] text-text-muted">H{heading.level}</span>
+              <span className="truncate">{heading.text}</span>
+            </button>
+          ))
+        )}
+      </nav>
+      <div className="border-t border-border p-4">
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <p className="text-lg font-semibold">{words.toLocaleString()}</p>
+            <p className="text-[11px] text-text-muted">words</p>
           </div>
-
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-lg border border-border bg-surface p-2">
-              <div className="text-[10px] text-text-muted">Words</div>
-              <div className="mt-0.5 text-sm font-semibold text-text-primary">{stats.words}</div>
-            </div>
-            <div className="rounded-lg border border-border bg-surface p-2">
-              <div className="text-[10px] text-text-muted">Characters</div>
-              <div className="mt-0.5 text-sm font-semibold text-text-primary">
-                {stats.characters}
-              </div>
-            </div>
-            <div className="rounded-lg border border-border bg-surface p-2">
-              <div className="flex items-center gap-1 text-[10px] text-text-muted">
-                <Clock size={10} />
-                <span>Reading Time</span>
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-text-primary">
-                {stats.readingTime} min
-              </div>
-            </div>
-            <div className="rounded-lg border border-border bg-surface p-2">
-              <div className="flex items-center gap-1 text-[10px] text-text-muted">
-                <Hash size={10} />
-                <span>Headings</span>
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-text-primary">
-                {headings.length}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-lg border border-border bg-surface/50 p-2 text-[11px] text-text-muted">
-            <div className="truncate font-medium text-text-secondary">{fileName}</div>
-            <div className="mt-0.5 text-[10px] text-text-muted">Part of OfficeFusion suite</div>
+          <div>
+            <p className="text-lg font-semibold">{Math.max(1, Math.ceil(words / 200))} min</p>
+            <p className="text-[11px] text-text-muted">reading time</p>
           </div>
         </div>
-      </ScrollArea>
+        <p className="mt-4 text-[10px] tracking-wider text-text-muted">MARKA / OFFICEFUSION</p>
+      </div>
     </aside>
   )
 }

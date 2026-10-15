@@ -2,6 +2,23 @@ import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
 
 export function registerIpcHandlers(): void {
+  ipcMain.handle('dialog:confirmUnsavedChanges', async (event, fileName: string) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    const options = {
+      type: 'warning' as const,
+      title: 'Unsaved changes',
+      message: `Save changes to ${fileName}?`,
+      detail: 'Your changes will be lost if you discard them.',
+      buttons: ['Save', 'Discard changes', 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true
+    }
+    const result = window
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options)
+    return ['save', 'discard', 'cancel'][result.response] ?? 'cancel'
+  })
   ipcMain.handle('app:version', () => '0.1.0')
 
   ipcMain.handle('dialog:openFile', async () => {
@@ -85,22 +102,24 @@ export function registerIpcHandlers(): void {
       }
     })
 
-    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`)
-    const pdfData = await printWindow.webContents.printToPDF({
-      printBackground: true,
-      pageSize: 'A4',
-      margins: {
-        marginType: 'custom',
-        top: 0.75,
-        bottom: 0.75,
-        left: 0.75,
-        right: 0.75
-      }
-    })
-    printWindow.destroy()
-
-    await writeFile(result.filePath, pdfData)
-    return result.filePath
+    try {
+      await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`)
+      const pdfData = await printWindow.webContents.printToPDF({
+        printBackground: true,
+        pageSize: 'A4',
+        margins: {
+          marginType: 'custom',
+          top: 0.75,
+          bottom: 0.75,
+          left: 0.75,
+          right: 0.75
+        }
+      })
+      await writeFile(result.filePath, pdfData)
+      return result.filePath
+    } finally {
+      printWindow.destroy()
+    }
   })
 
   ipcMain.handle('export:html', async (_, htmlContent: string) => {

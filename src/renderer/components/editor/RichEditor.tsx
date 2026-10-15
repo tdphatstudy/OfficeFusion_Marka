@@ -1,4 +1,4 @@
-import { useEffect, useRef, type FC } from 'react'
+import { useEffect, type FC } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
@@ -6,7 +6,6 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
-import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
@@ -19,16 +18,17 @@ import { useEditorStore } from '@/stores/editorStore'
 import { cn } from '@/lib/utils'
 
 export const RichEditor: FC = () => {
-  const { content, setContent, config } = useEditorStore()
-  const isInternalUpdate = useRef(false)
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null)
+  const content = useEditorStore.getState().content
+  const config = useEditorStore(state => state.config)
+  const fontFamilies = { mono: 'ui-monospace, monospace', prose: 'Georgia, serif', sans: 'inherit' }
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: {
-          levels: [1, 2, 3, 4]
-        }
+          levels: [1, 2, 3, 4, 5, 6]
+        },
+        link: false
       }),
       Markdown.configure({
         html: true,
@@ -48,7 +48,6 @@ export const RichEditor: FC = () => {
       TaskItem.configure({
         nested: true
       }),
-      Underline,
       Link.configure({
         openOnClick: false
       }),
@@ -66,6 +65,7 @@ export const RichEditor: FC = () => {
       SlashCommandExtension
     ],
     content,
+    shouldRerenderOnTransaction: false,
     editorProps: {
       attributes: {
         class:
@@ -73,45 +73,49 @@ export const RichEditor: FC = () => {
       }
     },
     onUpdate: ({ editor: currentEditor }): void => {
-      isInternalUpdate.current = true
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current)
+      const markdownStorage = currentEditor.storage.markdown
+      if (markdownStorage) {
+        useEditorStore.getState().setContent(markdownStorage.getMarkdown())
       }
-      debounceTimer.current = setTimeout(() => {
-        const markdownStorage = (
-          currentEditor.storage as { markdown?: { getMarkdown: () => string } }
-        ).markdown
-        if (markdownStorage) {
-          const md = markdownStorage.getMarkdown()
-          setContent(md)
-        }
-        isInternalUpdate.current = false
-      }, 150)
     }
   })
 
   useEffect(() => {
-    return (): void => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!editor || isInternalUpdate.current) {
+    if (!editor) {
       return
     }
 
-    const markdownStorage = (editor.storage as { markdown?: { getMarkdown: () => string } })
-      .markdown
+    const markdownStorage = editor.storage.markdown
     if (markdownStorage) {
       const currentMd = markdownStorage.getMarkdown()
       if (currentMd !== content) {
-        editor.commands.setContent(content)
+        editor.commands.setContent(content, { emitUpdate: false })
       }
     }
   }, [content, editor])
+
+  useEffect(() => {
+    const navigate = (event: Event): void => {
+      if (!(event instanceof CustomEvent)) {
+        return
+      }
+      const detail: unknown = event.detail
+      if (
+        typeof detail !== 'object' ||
+        detail === null ||
+        !('index' in detail) ||
+        typeof detail.index !== 'number'
+      ) {
+        return
+      }
+      const heading = editor?.view.dom.querySelectorAll('h1, h2, h3, h4, h5, h6')[detail.index]
+      heading?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+    window.addEventListener('marka:navigate', navigate)
+    return () => {
+      window.removeEventListener('marka:navigate', navigate)
+    }
+  }, [editor])
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -124,7 +128,14 @@ export const RichEditor: FC = () => {
           )}
         >
           <BubbleMenu editor={editor} />
-          <EditorContent editor={editor} />
+          <EditorContent
+            editor={editor}
+            style={{
+              fontSize: config.fontSize,
+              lineHeight: config.lineHeight,
+              fontFamily: fontFamilies[config.fontFamily]
+            }}
+          />
         </div>
       </div>
     </div>

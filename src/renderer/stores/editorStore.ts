@@ -1,32 +1,43 @@
 import { create } from 'zustand'
-import { immer } from 'zustand/middleware/immer'
 import { persist } from 'zustand/middleware'
+import { readDraft } from '@/lib/draft'
+import { preferenceStorage } from '@/lib/preferenceStorage'
 import type { EditorConfig, ViewMode } from '@/types/editor'
 
 interface EditorState {
   content: string
+  savedContent: string
+  documentId: number
   filePath: string | null
   fileName: string
   isDirty: boolean
+  recovered: boolean
   viewMode: ViewMode
   config: EditorConfig
   setContent: (content: string) => void
   openFile: (path: string, content: string) => void
-  markSaved: (path: string) => void
+  markSaved: (path: string, content: string, documentId: number) => void
   setViewMode: (mode: ViewMode) => void
   toggleFullWidth: () => void
   updateConfig: (patch: Partial<EditorConfig>) => void
-  newFile: () => void
+  newFile: (content?: string) => void
+  dismissRecovery: () => void
 }
+
+const welcome =
+  '# Welcome to Marka\n\nYour writing space in OfficeFusion.\n\nType `/` to insert a block, or open Commands to explore shortcuts and templates.\n'
+const draft = readDraft()
 
 export const useEditorStore = create<EditorState>()(
   persist(
-    immer(set => ({
-      content:
-        '# Welcome to Marka\n\nExperience rich Notion-style editing with pure Markdown fidelity.\n\nType `/` anywhere to insert blocks, tables, callouts, or formulas.\n',
-      filePath: null,
-      fileName: 'Untitled.md',
-      isDirty: false,
+    set => ({
+      content: draft?.content ?? welcome,
+      savedContent: draft?.savedContent ?? welcome,
+      documentId: 0,
+      filePath: draft?.filePath ?? null,
+      fileName: draft?.filePath?.split(/[\\/]/).pop() ?? 'Untitled.md',
+      isDirty: draft !== null,
+      recovered: draft !== null,
       viewMode: 'rich',
       config: {
         fontSize: 15,
@@ -38,46 +49,49 @@ export const useEditorStore = create<EditorState>()(
         fontFamily: 'sans',
         fullWidth: false
       },
-      setContent: content =>
-        set(state => {
-          state.content = content
-          state.isDirty = true
-        }),
+      setContent: content => set(state => ({ content, isDirty: content !== state.savedContent })),
       openFile: (path, content) =>
+        set(state => ({
+          documentId: state.documentId + 1,
+          filePath: path,
+          fileName: path.split(/[\\/]/).pop() ?? 'Untitled.md',
+          content,
+          savedContent: content,
+          isDirty: false,
+          recovered: false
+        })),
+      markSaved: (path, content, documentId) =>
         set(state => {
-          state.filePath = path
-          state.fileName = path.split(/[\\/]/).pop() ?? 'Untitled.md'
-          state.content = content
-          state.isDirty = false
+          if (state.documentId !== documentId) {
+            return state
+          }
+          return {
+            filePath: path,
+            fileName: path.split(/[\\/]/).pop() ?? 'Untitled.md',
+            savedContent: content,
+            isDirty: state.content !== content,
+            recovered: false
+          }
         }),
-      markSaved: path =>
-        set(state => {
-          state.filePath = path
-          state.fileName = path.split(/[\\/]/).pop() ?? 'Untitled.md'
-          state.isDirty = false
-        }),
-      setViewMode: mode =>
-        set(state => {
-          state.viewMode = mode
-        }),
+      setViewMode: viewMode => set({ viewMode }),
       toggleFullWidth: () =>
-        set(state => {
-          state.config.fullWidth = !state.config.fullWidth
-        }),
-      updateConfig: patch =>
-        set(state => {
-          Object.assign(state.config, patch)
-        }),
-      newFile: () =>
-        set(state => {
-          state.content = ''
-          state.filePath = null
-          state.fileName = 'Untitled.md'
-          state.isDirty = false
-        })
-    })),
+        set(state => ({ config: { ...state.config, fullWidth: !state.config.fullWidth } })),
+      updateConfig: patch => set(state => ({ config: { ...state.config, ...patch } })),
+      newFile: (content = '') =>
+        set(state => ({
+          documentId: state.documentId + 1,
+          content,
+          savedContent: '',
+          filePath: null,
+          fileName: 'Untitled.md',
+          isDirty: content !== '',
+          recovered: false
+        })),
+      dismissRecovery: () => set({ recovered: false })
+    }),
     {
       name: 'marka-editor',
+      storage: preferenceStorage,
       partialize: state => ({ config: state.config, viewMode: state.viewMode })
     }
   )

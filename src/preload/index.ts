@@ -1,20 +1,25 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
   openFile: (): Promise<{ path: string; content: string } | null> =>
     ipcRenderer.invoke('dialog:openFile'),
   saveFile: (content: string, filePath?: string): Promise<string | null> =>
     ipcRenderer.invoke('dialog:saveFile', content, filePath),
-  readFile: (filePath: string): Promise<string> => ipcRenderer.invoke('fs:readFile', filePath),
-  watchFile: (filePath: string): Promise<void> => ipcRenderer.invoke('fs:watchFile', filePath),
-
-  onFileChanged: (callback: (content: string) => void): (() => void) => {
-    ipcRenderer.on('file:changed', (_event, content: string) => callback(content))
+  confirmUnsavedChanges: (fileName: string): Promise<'save' | 'discard' | 'cancel'> =>
+    ipcRenderer.invoke('dialog:confirmUnsavedChanges', fileName),
+  confirmClose: (): void => {
+    ipcRenderer.send('window:confirmClose')
+  },
+  onCloseRequested: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('window:closeRequested', listener)
+    ipcRenderer.send('window:closeGuardReady', true)
     return (): void => {
-      ipcRenderer.removeAllListeners('file:changed')
+      ipcRenderer.removeListener('window:closeRequested', listener)
+      ipcRenderer.send('window:closeGuardReady', false)
     }
   },
+  readFile: (filePath: string): Promise<string> => ipcRenderer.invoke('fs:readFile', filePath),
 
   minimize: (): void => {
     ipcRenderer.send('window:minimize')
@@ -35,13 +40,11 @@ const api = {
 
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
     console.error(error)
   }
 } else {
-  const globalWindow = window as unknown as { electron: unknown; api: unknown }
-  globalWindow.electron = electronAPI
+  const globalWindow = window as unknown as { api: unknown }
   globalWindow.api = api
 }

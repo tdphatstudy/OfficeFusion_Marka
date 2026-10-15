@@ -143,3 +143,136 @@ ul[data-type='taskList'] li > div {
   color: hsl(var(--color-text-secondary));
   font-style: italic;
 }
+
+@layer components {
+  .icon-button {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-overlay hover:text-accent disabled:opacity-40;
+  }
+  .window-button {
+    @apply flex h-8 w-8 items-center justify-center rounded text-text-muted hover:bg-surface-overlay hover:text-text-primary;
+  }
+  .pane-heading {
+    @apply flex h-10 shrink-0 items-center justify-between border-b border-border px-4 text-[10px] font-medium tracking-wider text-text-muted;
+  }
+  .dialog-overlay {
+    @apply fixed inset-0 z-[60] bg-text-primary/20 backdrop-blur-sm;
+  }
+  .dialog-content {
+    @apply fixed left-1/2 z-[70] max-h-[80vh] w-[calc(100%-2rem)] -translate-x-1/2 overflow-auto rounded-2xl border border-border bg-surface text-text-primary shadow-2xl outline-none;
+  }
+  .settings-row {
+    @apply flex items-center justify-between gap-4 text-text-secondary;
+  }
+  .settings-row select {
+    @apply rounded-md border border-border bg-surface-raised px-3 py-1.5 text-text-primary;
+  }
+  .menu-content {
+    @apply z-[80] min-w-64 rounded-xl border border-border bg-surface p-1.5 text-sm text-text-primary shadow-xl;
+  }
+  .menu-item {
+    @apply flex cursor-default items-center justify-between gap-5 rounded-md px-3 py-2 outline-none data-[highlighted]:bg-accent/10 data-[highlighted]:text-accent data-[disabled]:opacity-40;
+  }
+  .menu-item kbd {
+    @apply text-[10px] text-text-muted;
+  }
+}
+
+button,
+input,
+select,
+textarea,
+[role='separator'] {
+  accent-color: hsl(var(--color-accent));
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[role='separator']:focus-visible {
+  outline: 2px solid hsl(var(--color-accent));
+  outline-offset: 2px;
+}
+
+.split-divider {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: hsl(var(--color-border));
+  touch-action: none;
+}
+
+.split-divider:hover,
+.split-divider:focus-visible {
+  background: hsl(var(--color-accent));
+}
+
+.tiptap {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.markdown-preview pre {
+  overflow: auto;
+  background: hsl(var(--color-surface-raised));
+  color: hsl(var(--color-text-primary));
+}
+
+.markdown-preview table {
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid hsl(var(--color-border));
+  padding: 0.5rem 0.75rem;
+}
+
+.markdown-preview .hljs-keyword,
+.markdown-preview .hljs-selector-tag {
+  color: hsl(var(--color-accent));
+}
+
+.markdown-preview .contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.markdown-preview .task-list-item input {
+  margin-right: 0.5rem;
+}
+
+.markdown-preview [data-type='callout'] {
+  border-left: 3px solid hsl(var(--color-accent));
+  background: hsl(var(--color-surface-raised));
+  padding: 1rem;
+  border-radius: 0.5rem;
+}
+
+.markdown-preview [data-type='callout'] > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-preview .hljs-string,
+.markdown-preview .hljs-comment {
+  color: hsl(var(--color-text-secondary));
+}
+
+[data-focus-mode='true'] .editor-toolbar {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .editor-workspace[data-mode='split'] {
+    flex-direction: column;
+  }
+  .editor-workspace[data-mode='split'] .source-pane {
+    flex: 1 1 50% !important;
+  }
+  .split-divider {
+    display: none;
+  }
+  .editor-workspace[data-mode='split'] > section {
+    border-top: 1px solid hsl(var(--color-border));
+  }
+}

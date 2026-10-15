@@ -1,35 +1,38 @@
-import { useEffect, useCallback } from 'react'
-import { useEditorStore } from '@/stores/editorStore'
+import { useEffect } from 'react'
+import { appCommands } from '@/lib/commands'
+import { useUIStore } from '@/stores/uiStore'
 
 export function useKeyboardShortcuts(): void {
-  const { newFile, setViewMode } = useEditorStore()
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey
-
-      if (mod && e.key === 'n') {
-        e.preventDefault()
-        newFile()
-      }
-      if (mod && e.key === '\\') {
-        e.preventDefault()
-        setViewMode('split')
-      }
-      if (mod && e.shiftKey && e.key === 'r') {
-        e.preventDefault()
-        setViewMode('rich')
-      }
-      if (mod && e.shiftKey && e.key === 's') {
-        e.preventDefault()
-        setViewMode('source')
-      }
-    },
-    [newFile, setViewMode]
-  )
-
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) {
+        return
+      }
+      if (event.isComposing || event.altKey || !(event.ctrlKey || event.metaKey)) {
+        return
+      }
+      const key = event.key.toLowerCase()
+      const ui = useUIStore.getState()
+      if (key === 'k' && !event.shiftKey) {
+        event.preventDefault()
+        if (!ui.settingsOpen) {
+          ui.setCommandOpen(!ui.commandOpen)
+        }
+        return
+      }
+      if (ui.commandOpen || ui.settingsOpen) {
+        return
+      }
+      const shortcut = `Mod ${event.shiftKey ? 'Shift ' : ''}${key === ',' || key === '\\' ? key : key.toUpperCase()}`
+      const command = appCommands.find(item => item.shortcut === shortcut)
+      if (command) {
+        event.preventDefault()
+        void command.run()
+      }
+    }
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
 }

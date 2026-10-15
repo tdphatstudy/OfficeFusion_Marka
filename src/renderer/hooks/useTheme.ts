@@ -7,7 +7,8 @@ interface ThemeHook {
 }
 
 export function useTheme(): ThemeHook {
-  const { theme, setTheme } = useUIStore()
+  const theme = useUIStore(state => state.theme)
+  const setTheme = useUIStore(state => state.setTheme)
 
   useEffect(() => {
     const root = document.documentElement

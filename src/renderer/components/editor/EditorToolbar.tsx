@@ -1,5 +1,6 @@
 import { useState, type FC } from 'react'
 import type { Editor } from '@tiptap/core'
+import { useEditorState } from '@tiptap/react'
 import {
   Undo2,
   Redo2,
@@ -28,9 +29,8 @@ import {
   Globe,
   FileText
 } from 'lucide-react'
-import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
-import { formatDocumentToHtml, formatDocumentToText } from '@/lib/utils/export'
+import { exportDocument } from '@/lib/exportDocument'
 import { cn } from '@/lib/utils'
 
 interface EditorToolbarProps {
@@ -38,8 +38,9 @@ interface EditorToolbarProps {
 }
 
 export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
-  const { fileName, content } = useEditorStore()
-  const { toggleSidebar, sidebarOpen } = useUIStore()
+  const toggleSidebar = useUIStore(state => state.toggleSidebar)
+  const sidebarOpen = useUIStore(state => state.sidebarOpen)
+  useEditorState({ editor, selector: state => state.transactionNumber })
   const [exportOpen, setExportOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
@@ -47,36 +48,11 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
     return null
   }
 
-  const handleExportPdf = async (): Promise<void> => {
+  const handleExport = async (format: 'pdf' | 'html' | 'txt'): Promise<void> => {
     setExportOpen(false)
     setIsExporting(true)
     try {
-      const html = editor.getHTML()
-      const formatted = formatDocumentToHtml(fileName, html)
-      await window.api.exportPdf(formatted)
-    } finally {
-      setIsExporting(false)
-    }
-  }
-
-  const handleExportHtml = async (): Promise<void> => {
-    setExportOpen(false)
-    setIsExporting(true)
-    try {
-      const html = editor.getHTML()
-      const formatted = formatDocumentToHtml(fileName, html)
-      await window.api.exportHtml(formatted)
-    } finally {
-      setIsExporting(false)
-    }
-  }
-
-  const handleExportTxt = async (): Promise<void> => {
-    setExportOpen(false)
-    setIsExporting(true)
-    try {
-      const text = formatDocumentToText(content)
-      await window.api.exportTxt(text)
+      await exportDocument(format)
     } finally {
       setIsExporting(false)
     }
@@ -101,7 +77,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
   const currentHeading = getCurrentHeading()
 
   return (
-    <div className="flex h-10 w-full shrink-0 items-center justify-between border-b border-border bg-surface px-2 select-none">
+    <div className="editor-toolbar flex h-10 w-full shrink-0 items-center justify-between border-b border-border bg-surface px-2 select-none">
       <div className="flex items-center gap-0.5 overflow-x-auto py-1">
         <button
           type="button"
@@ -451,7 +427,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
             <div className="absolute right-0 top-8 z-50 w-44 rounded-lg border border-border bg-surface-overlay p-1 shadow-xl">
               <button
                 type="button"
-                onClick={handleExportPdf}
+                onClick={() => {
+                  void handleExport('pdf')
+                }}
                 className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs text-text-primary hover:bg-surface-raised"
               >
                 <FileDown size={13} className="text-red-500" />
@@ -459,7 +437,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
               </button>
               <button
                 type="button"
-                onClick={handleExportHtml}
+                onClick={() => {
+                  void handleExport('html')
+                }}
                 className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs text-text-primary hover:bg-surface-raised"
               >
                 <Globe size={13} className="text-blue-500" />
@@ -467,7 +447,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
               </button>
               <button
                 type="button"
-                onClick={handleExportTxt}
+                onClick={() => {
+                  void handleExport('txt')
+                }}
                 className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs text-text-primary hover:bg-surface-raised"
               >
                 <FileText size={13} className="text-emerald-500" />

@@ -1,58 +1,83 @@
-# Marka — Professional Markdown Editor
+# Marka — Markdown Editor by OfficeFusion
 
-> Part of the [OfficeFusion](https://github.com/officefusion) ecosystem.
-
-A powerful, cross-platform Markdown editor built with Electron, React, and TypeScript.
+A desktop writing space built with Electron, React and TypeScript.
 
 ## Features
 
-- 📝 Full Markdown editing with CodeMirror 6
-- 👁️ Live preview with remark/rehype pipeline
-- 🎨 GFM, LaTeX math, Mermaid diagrams, footnotes
-- 🌓 Light/Dark theme
-- 📁 Workspace-based file management
-- 📤 Export to HTML, PDF, DOCX
-- ⚡ Fast, cross-platform (Windows, macOS, Linux)
+- Rich block editing with tables, task lists, formatting and slash commands.
+- CodeMirror source editing with Markdown highlighting, undo/redo, line numbers, word wrap,
+  configurable indentation, and find/replace.
+- Resizable Source + Preview view, with a stacked layout for smaller windows.
+- Sanitized Markdown preview with GFM tables, task lists, footnotes, syntax highlighting and KaTeX.
+  Preview parsing runs in a worker, independently of typing.
+- Document outline with correct source navigation, including setext and H1–H6 headings.
+- New, Open, Save and Save As with unsaved-change protection and visible error feedback.
+- Local draft recovery, including empty edits. Recovery writes after 600 ms of inactivity and on
+  normal unload; use Save to persist the document to disk.
+- Searchable command palette, meeting notes and project brief templates.
+- Light/dark/system appearance, writing preferences and focus mode.
+- HTML, PDF and plain-text export from every editing mode.
+
+Documents containing frontmatter, math, footnotes or Mermaid syntax stay in Source/Split to preserve
+unsupported rich-editor syntax. Mermaid code is preserved as source; diagram rendering is planned.
+Files larger than 100,000 characters also use Source/Split for predictable editing performance.
+
+Workspace folders, multi-file tabs, DOCX/EPUB export and OfficeFusion cloud integration are planned.
+See [UPGRADE_PLAN.md](./UPGRADE_PLAN.md) for the audit, acceptance criteria and next priorities.
 
 ## Development
 
-### Prerequisites
+Requires Node.js 20.19+ and pnpm 9.
 
-- Node.js 20+
-- npm 10+
-
-### Setup
-
-```bash
-npm install
-npm run dev
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-### Build
+## Validation
 
-```bash
-# Build for current platform
-npm run package
-
-# Platform-specific
-npm run package:win
-npm run package:mac
-npm run package:linux
+```sh
+pnpm lint
+pnpm typecheck:node
+pnpm typecheck:web
+pnpm test
+pnpm build
+pnpm test:smoke
 ```
 
-### Scripts
+`test` runs regression tests with the Node test runner. `test:smoke` launches the built Electron app
+with Playwright, an isolated profile, and real test files under `tmp/electron-smoke/`. Native dialog
+responses are automated. Build first; Electron must be able to launch in the current desktop
+session. No separate Playwright browser download is needed. Screenshots and export samples are saved
+in `tmp/`.
 
-| Command             | Description               |
-| ------------------- | ------------------------- |
-| `npm run dev`       | Start dev server with HMR |
-| `npm run build`     | Build for production      |
-| `npm run lint`      | Run ESLint                |
-| `npm run format`    | Format with Prettier      |
-| `npm run typecheck` | Type-check all            |
+## Keyboard shortcuts
 
-## Code Style
+Use Command instead of Ctrl on macOS.
 
-See [CODESTYLE.md](./CODESTYLE.md) for coding conventions.
+| Shortcut                    | Action                                      |
+| --------------------------- | ------------------------------------------- |
+| Ctrl+N / Ctrl+O             | New / Open                                  |
+| Ctrl+S / Ctrl+Shift+S       | Save / Save As                              |
+| Ctrl+K                      | Command palette                             |
+| Ctrl+F                      | Find/replace in Source (switches from Rich) |
+| Ctrl+Shift+R / Ctrl+Shift+M | Rich / Source                               |
+| Ctrl+\                      | Split view                                  |
+| Ctrl+Shift+O                | Toggle outline                              |
+| Ctrl+Shift+F                | Toggle focus mode                           |
+| Ctrl+,                      | Editor settings                             |
+
+## Build
+
+```sh
+pnpm build
+pnpm package:win
+pnpm package:mac
+pnpm package:linux
+```
+
+See [CODESTYLE.md](./CODESTYLE.md) for coding conventions and [QA_REPORT.md](./QA_REPORT.md) for the
+validation scope and remaining limitations.
 
 ## License
 
