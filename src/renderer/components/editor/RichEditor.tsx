@@ -14,8 +14,10 @@ import { CalloutExtension } from './extensions/CalloutExtension'
 import { SlashCommandExtension } from './extensions/SlashCommandExtension'
 import { BubbleMenu } from './BubbleMenu'
 import { EditorToolbar } from './EditorToolbar'
+import { DocumentToolbar } from '@/components/layout/DocumentToolbar'
 import { useEditorStore } from '@/stores/editorStore'
 import { cn } from '@/lib/utils'
+import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
 
 export const RichEditor: FC = () => {
   const content = useEditorStore.getState().content
@@ -84,6 +86,27 @@ export const RichEditor: FC = () => {
     if (!editor) {
       return
     }
+    const publish = (): void => publishEditorHistory(editor.can().undo(), editor.can().redo())
+    publish()
+    editor.on('transaction', publish)
+    const unsubscribe = subscribeEditorHistory(action => {
+      if (action === 'undo') {
+        editor.chain().focus().undo().run()
+      } else {
+        editor.chain().focus().redo().run()
+      }
+    })
+    return () => {
+      editor.off('transaction', publish)
+      unsubscribe()
+      publishEditorHistory(false, false)
+    }
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor) {
+      return
+    }
 
     const markdownStorage = editor.storage.markdown
     if (markdownStorage) {
@@ -119,12 +142,14 @@ export const RichEditor: FC = () => {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <EditorToolbar editor={editor} />
-      <div className="relative flex flex-1 flex-col overflow-y-auto">
+      <DocumentToolbar>
+        <EditorToolbar editor={editor} />
+      </DocumentToolbar>
+      <div className="writing-canvas relative flex flex-1 flex-col overflow-y-auto">
         <div
           className={cn(
-            'w-full flex-1 transition-all duration-200',
-            config.fullWidth ? 'px-10 py-8' : 'mx-auto max-w-3xl px-8 py-8'
+            'writing-surface w-full flex-1',
+            config.fullWidth ? 'writing-surface-wide' : 'mx-auto'
           )}
         >
           <BubbleMenu editor={editor} />

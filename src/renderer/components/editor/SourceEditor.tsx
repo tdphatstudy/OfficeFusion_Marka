@@ -7,7 +7,16 @@ import {
   highlightActiveLine,
   drawSelection
 } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+  undo,
+  redo,
+  undoDepth,
+  redoDepth
+} from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import {
   defaultHighlightStyle,
@@ -24,6 +33,7 @@ import {
 import { useEditorStore } from '@/stores/editorStore'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { useUIStore } from '@/stores/uiStore'
+import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
 
 export const SourceEditor: FC = () => {
   const host = useRef<HTMLDivElement>(null)
@@ -56,6 +66,7 @@ export const SourceEditor: FC = () => {
           EditorView.contentAttributes.of({ 'aria-label': 'Markdown source', spellcheck: 'false' }),
           preferences.current.of([]),
           EditorView.updateListener.of(update => {
+            publishEditorHistory(undoDepth(update.state) > 0, redoDepth(update.state) > 0)
             if (update.docChanged) {
               useEditorStore.getState().setContent(update.state.doc.toString())
             }
@@ -64,6 +75,15 @@ export const SourceEditor: FC = () => {
       })
     })
     view.current = instance
+    publishEditorHistory(undoDepth(instance.state) > 0, redoDepth(instance.state) > 0)
+    const unsubscribeHistory = subscribeEditorHistory(action => {
+      if (action === 'undo') {
+        undo(instance)
+      } else {
+        redo(instance)
+      }
+      instance.focus()
+    })
     const navigate = (event: Event): void => {
       if (!(event instanceof CustomEvent)) {
         return
@@ -89,8 +109,10 @@ export const SourceEditor: FC = () => {
     window.addEventListener('marka:navigate', navigate)
     return () => {
       window.removeEventListener('marka:navigate', navigate)
+      unsubscribeHistory()
       instance.destroy()
       view.current = null
+      publishEditorHistory(false, false)
     }
   }, [documentId])
 
@@ -175,7 +197,7 @@ export const SourceEditor: FC = () => {
       className="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface"
     >
       <div className="pane-heading">
-        <span>MARKDOWN SOURCE</span>
+        <span>Markdown source</span>
         <span>UTF-8</span>
       </div>
       <div ref={host} className="min-h-0 flex-1 overflow-hidden" />

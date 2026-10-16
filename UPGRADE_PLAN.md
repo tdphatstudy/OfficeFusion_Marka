@@ -37,6 +37,18 @@ Rich editor chỉ dành cho cú pháp mà nó có thể giữ được. Tài li�
 Mermaid hoặc trên 100.000 ký tự được giữ ở Source/Split. Không chuyển qua Rich rồi serialize mất dữ
 liệu.
 
+## Thiết kế cho văn phòng và kỹ thuật
+
+Đợt 3 dùng khảo sát tài liệu chính thức và review thiết kế độc lập để tổ chức lại giao diện. Người
+dùng chọn hướng 01: ngòi bút, với cùng hình học ở Light/Dark và icon desktop. Titlebar giữ thông tin
+tài liệu; File/Edit/View nhóm lệnh; Write/Markdown/Split và định dạng nằm trong document toolbar.
+Outline không lặp đường dẫn; bố cục nhỏ có state riêng để giữ preference desktop.
+
+Tiêu chí: giữ selection khi định dạng, Undo/Redo đi tới editor đang mount, Find nhận focus, guard
+Markdown tiếp tục bảo toàn cú pháp, thao tác vẫn truy cập được ở 800×600. Nguồn tham khảo và quy ước
+ở [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md). Chưa có bộ nhận diện OfficeFusion khác để đối chiếu; việc
+dùng chung các quy ước này cho toàn hệ sinh thái là đề xuất.
+
 ## Roadmap đề xuất sau đợt này
 
 Đợt 2 đã bổ sung logo SVG mới và icon desktop đồng bộ, nút Light/Dark trực tiếp, Connection Hub cho

@@ -15,14 +15,12 @@ export const SettingsDialog: FC = () => {
         <Dialog.Overlay className="dialog-overlay" />
         <Dialog.Content className="dialog-content top-[12%] max-w-md p-6">
           <div className="flex items-center justify-between">
-            <Dialog.Title className="text-lg font-semibold">
-              Make room for your writing
-            </Dialog.Title>
+            <Dialog.Title className="text-base font-semibold">Editor settings</Dialog.Title>
             <Dialog.Close aria-label="Close settings" className="icon-button">
               <X size={18} />
             </Dialog.Close>
           </div>
-          <Dialog.Description className="mt-2 text-sm text-text-secondary">
+          <Dialog.Description className="mt-2 text-xs text-text-secondary">
             Preferences apply immediately and stay on this device.
           </Dialog.Description>
           <div className="mt-6 space-y-5 text-sm">
@@ -114,7 +112,7 @@ export const SettingsDialog: FC = () => {
               />
             </label>
             <label className="settings-row">
-              Full width rich canvas
+              Full width writing canvas
               <input
                 type="checkbox"
                 checked={config.fullWidth}

@@ -7,6 +7,7 @@ type Theme = 'light' | 'dark' | 'system'
 interface UIState {
   theme: Theme
   sidebarOpen: boolean
+  compactSidebarOpen: boolean
   sidebarWidth: number
   commandOpen: boolean
   connectionsOpen: boolean
@@ -34,6 +35,7 @@ export const useUIStore = create<UIState>()(
     set => ({
       theme: 'system',
       sidebarOpen: true,
+      compactSidebarOpen: false,
       sidebarWidth: 240,
       commandOpen: false,
       connectionsOpen: false,
@@ -44,7 +46,12 @@ export const useUIStore = create<UIState>()(
       notice: null,
 
       setTheme: theme => set({ theme }),
-      toggleSidebar: () => set(state => ({ sidebarOpen: !state.sidebarOpen })),
+      toggleSidebar: () =>
+        set(state =>
+          window.matchMedia('(max-width: 900px)').matches
+            ? { compactSidebarOpen: !state.compactSidebarOpen }
+            : { sidebarOpen: !state.sidebarOpen }
+        ),
       setSidebarWidth: width => set({ sidebarWidth: Math.max(200, Math.min(360, width)) }),
       setCommandOpen: commandOpen => set({ commandOpen }),
       setConnectionsOpen: connectionsOpen => set({ connectionsOpen }),

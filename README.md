@@ -4,10 +4,10 @@ A desktop writing space built with Electron, React and TypeScript.
 
 ## Features
 
-- Rich block editing with tables, task lists, formatting and slash commands.
-- CodeMirror source editing with Markdown highlighting, undo/redo, line numbers, word wrap,
-  configurable indentation, and find/replace.
-- Resizable Source + Preview view, with a stacked layout for smaller windows.
+- Write mode with tables, task lists, formatting and slash commands.
+- CodeMirror Markdown editing with highlighting, undo/redo, line numbers, word wrap, configurable
+  indentation, and find/replace.
+- Resizable Split view with Markdown and preview, stacked at smaller window widths.
 - Sanitized Markdown preview with GFM tables, task lists, footnotes, syntax highlighting and KaTeX.
   Preview parsing runs in a worker, independently of typing.
 - Document outline with correct source navigation, including setext and H1–H6 headings.
@@ -18,16 +18,19 @@ A desktop writing space built with Electron, React and TypeScript.
 - Light/dark/system appearance with a quick theme switch, writing preferences and focus mode.
 - Connection Hub for local files, Windows WSL distributions, SSH Linux hosts, network paths and raw
   Markdown URLs, with saved profiles and recent documents.
-- A new SVG brand mark with matching Windows, macOS and Linux app icons.
+- A writing-nib brand mark with Light/Dark variants and matching desktop icons.
+- Document-focused titlebar, File/Edit/View menus, contextual formatting and a compact outline.
 - HTML, PDF and plain-text export from every editing mode.
 
-Documents containing frontmatter, math, footnotes or Mermaid syntax stay in Source/Split to preserve
-unsupported rich-editor syntax. Mermaid code is preserved as source; diagram rendering is planned.
-Files larger than 100,000 characters also use Source/Split for predictable editing performance.
+Documents containing frontmatter, math, footnotes or Mermaid syntax stay in Markdown/Split to
+preserve unsupported rich-editor syntax. Mermaid code is preserved as source; diagram rendering is
+planned. Files larger than 100,000 characters also use Markdown/Split for predictable editing
+performance.
 
 Workspace folders, multi-file tabs, DOCX/EPUB export and OfficeFusion cloud integration are planned.
 See [UPGRADE_PLAN.md](./UPGRADE_PLAN.md) for the audit, acceptance criteria and next priorities. See
-[CONNECTIONS.md](./CONNECTIONS.md) for authentication, file paths, write behavior and limits.
+[CONNECTIONS.md](./CONNECTIONS.md) for authentication, file paths, write behavior and limits. See
+[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md) for the desktop interface and brand guidelines.
 
 ## Development
 
@@ -67,18 +70,18 @@ suite removes that file afterward. No personal documents are used.
 
 Use Command instead of Ctrl on macOS.
 
-| Shortcut                    | Action                                      |
-| --------------------------- | ------------------------------------------- |
-| Ctrl+N / Ctrl+O             | New / Open                                  |
-| Ctrl+S / Ctrl+Shift+S       | Save / Save As                              |
-| Ctrl+K                      | Command palette                             |
-| Ctrl+Shift+C                | Connection Hub                              |
-| Ctrl+F                      | Find/replace in Source (switches from Rich) |
-| Ctrl+Shift+R / Ctrl+Shift+M | Rich / Source                               |
-| Ctrl+\                      | Split view                                  |
-| Ctrl+Shift+O                | Toggle outline                              |
-| Ctrl+Shift+F                | Toggle focus mode                           |
-| Ctrl+,                      | Editor settings                             |
+| Shortcut                    | Action                                         |
+| --------------------------- | ---------------------------------------------- |
+| Ctrl+N / Ctrl+O             | New / Open                                     |
+| Ctrl+S / Ctrl+Shift+S       | Save / Save As                                 |
+| Ctrl+K                      | Command palette                                |
+| Ctrl+Shift+C                | Connection Hub                                 |
+| Ctrl+F                      | Find/replace in Markdown (switches from Write) |
+| Ctrl+Shift+R / Ctrl+Shift+M | Write / Markdown                               |
+| Ctrl+\                      | Split view                                     |
+| Ctrl+Shift+O                | Toggle outline                                 |
+| Ctrl+Shift+F                | Toggle focus mode                              |
+| Ctrl+,                      | Editor settings                                |
 
 ## Build
 

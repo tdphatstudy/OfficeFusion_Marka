@@ -22,28 +22,29 @@ const StatusBar: FC = () => {
   if (fileBusy) {
     saveStatus = 'Working…'
   }
-  const modeLabels = { rich: 'Rich editor', split: 'Split view', source: 'Source mode' }
+  const modeLabels = { rich: 'Write mode', split: 'Split view', source: 'Markdown mode' }
 
   const toggleMode = (): void => {
     changeViewMode(viewMode === 'rich' ? 'source' : 'rich')
   }
 
   return (
-    <div className="flex h-6 select-none items-center gap-2 border-t border-border bg-surface-raised px-3 text-[11px] text-text-muted">
-      <span className={isDirty ? 'text-amber-500' : 'text-text-muted'}>{saveStatus}</span>
+    <div className="statusbar flex h-6 shrink-0 select-none items-center gap-2 border-t border-border bg-surface-raised px-3 text-[11px] text-text-muted">
+      <span className={isDirty ? 'shrink-0 text-accent' : 'shrink-0 text-text-muted'}>
+        {saveStatus}
+      </span>
 
       <Separator orientation="vertical" className="h-3" />
 
-      <span>{words.toLocaleString()} words</span>
-      <Separator orientation="vertical" className="h-3" />
-      <span>{readingTime} min read</span>
+      <span className="shrink-0">{words.toLocaleString()} words</span>
+      <Separator orientation="vertical" className="statusbar-reading h-3" />
+      <span className="statusbar-reading shrink-0">{readingTime} min read</span>
 
-      <span className="flex-1" />
       {location?.kind === 'ssh' && (
         <button
           type="button"
           onClick={() => useUIStore.getState().setConnectionsOpen(true)}
-          className="font-medium text-accent"
+          className="shrink-0 font-medium text-accent"
           title="Open connection hub"
         >
           SSH · {location.host}
@@ -51,18 +52,20 @@ const StatusBar: FC = () => {
       )}
 
       {filePath ? (
-        <span className="max-w-xs truncate opacity-60" title={filePath}>
+        <span className="min-w-0 flex-1 truncate pl-2" title={filePath}>
           {filePath}
         </span>
-      ) : null}
+      ) : (
+        <span className="min-w-0 flex-1 truncate pl-2">Not saved to a file</span>
+      )}
 
       <Separator orientation="vertical" className="h-3" />
-      <span>UTF-8</span>
+      <span className="shrink-0">UTF-8</span>
       <Separator orientation="vertical" className="h-3" />
       <button
         type="button"
         onClick={toggleMode}
-        className="font-medium text-accent hover:underline"
+        className="shrink-0 font-medium text-text-secondary hover:underline"
       >
         {modeLabels[viewMode]}
       </button>

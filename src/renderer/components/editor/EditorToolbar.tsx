@@ -1,464 +1,280 @@
-import { useState, type FC } from 'react'
+import { useRef, type FC } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useEditorState } from '@tiptap/react'
-import {
-  Undo2,
-  Redo2,
-  Bold,
-  Italic,
-  Underline as UnderlineIcon,
-  Strikethrough,
-  Highlighter,
-  Code,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  AlignJustify,
-  List,
-  ListOrdered,
-  CheckSquare,
-  Table as TableIcon,
-  AlertCircle,
-  Code2,
-  Quote,
-  Minus,
-  Download,
-  ListTree,
-  ChevronDown,
-  FileDown,
-  Globe,
-  FileText
-} from 'lucide-react'
-import { useUIStore } from '@/stores/uiStore'
-import { exportDocument } from '@/lib/exportDocument'
+import * as Menu from '@radix-ui/react-dropdown-menu'
+import { Bold, Italic, List, Table as TableIcon, ChevronDown, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface EditorToolbarProps {
   editor: Editor | null
 }
 
-export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
-  const toggleSidebar = useUIStore(state => state.toggleSidebar)
-  const sidebarOpen = useUIStore(state => state.sidebarOpen)
-  useEditorState({ editor, selector: state => state.transactionNumber })
-  const [exportOpen, setExportOpen] = useState(false)
-  const [isExporting, setIsExporting] = useState(false)
+interface FormatAction {
+  label: string
+  run: () => boolean
+  active?: boolean
+  disabled?: boolean
+}
 
+export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
+  useEditorState({ editor, selector: state => state.transactionNumber })
+  const actionSelected = useRef(false)
   if (!editor) {
     return null
   }
-
-  const handleExport = async (format: 'pdf' | 'html' | 'txt'): Promise<void> => {
-    setExportOpen(false)
-    setIsExporting(true)
-    try {
-      await exportDocument(format)
-    } finally {
-      setIsExporting(false)
+  const heading = [1, 2, 3, 4, 5, 6].find(level => editor.isActive('heading', { level }))
+  const headingLabel = heading ? `Heading ${heading}` : 'Normal'
+  const applyAction = (run: () => boolean): void => {
+    actionSelected.current = true
+    run()
+  }
+  const restoreMenuFocus = (event: Event): void => {
+    if (actionSelected.current) {
+      event.preventDefault()
+      actionSelected.current = false
     }
   }
-
-  const getCurrentHeading = (): string => {
-    if (editor.isActive('heading', { level: 1 })) {
-      return 'H1'
-    }
-    if (editor.isActive('heading', { level: 2 })) {
-      return 'H2'
-    }
-    if (editor.isActive('heading', { level: 3 })) {
-      return 'H3'
-    }
-    if (editor.isActive('heading', { level: 4 })) {
-      return 'H4'
-    }
-    return 'Normal'
-  }
-
-  const currentHeading = getCurrentHeading()
-
+  const actions: FormatAction[] = [
+    {
+      label: 'Undo (Ctrl+Z)',
+      run: () => editor.chain().focus().undo().run(),
+      disabled: !editor.can().undo()
+    },
+    {
+      label: 'Redo (Ctrl+Y)',
+      run: () => editor.chain().focus().redo().run(),
+      disabled: !editor.can().redo()
+    },
+    {
+      label: 'Underline (Ctrl+U)',
+      run: () => editor.chain().focus().toggleUnderline().run(),
+      active: editor.isActive('underline')
+    },
+    {
+      label: 'Strikethrough',
+      run: () => editor.chain().focus().toggleStrike().run(),
+      active: editor.isActive('strike')
+    },
+    {
+      label: 'Highlight',
+      run: () => editor.chain().focus().toggleHighlight().run(),
+      active: editor.isActive('highlight')
+    },
+    {
+      label: 'Inline Code',
+      run: () => editor.chain().focus().toggleCode().run(),
+      active: editor.isActive('code')
+    },
+    {
+      label: 'Align Left',
+      run: () => editor.chain().focus().setTextAlign('left').run(),
+      active: editor.isActive({ textAlign: 'left' })
+    },
+    {
+      label: 'Align Center',
+      run: () => editor.chain().focus().setTextAlign('center').run(),
+      active: editor.isActive({ textAlign: 'center' })
+    },
+    {
+      label: 'Align Right',
+      run: () => editor.chain().focus().setTextAlign('right').run(),
+      active: editor.isActive({ textAlign: 'right' })
+    },
+    {
+      label: 'Justify',
+      run: () => editor.chain().focus().setTextAlign('justify').run(),
+      active: editor.isActive({ textAlign: 'justify' })
+    },
+    {
+      label: 'Bullet List',
+      run: () => editor.chain().focus().toggleBulletList().run(),
+      active: editor.isActive('bulletList')
+    },
+    {
+      label: 'Numbered List',
+      run: () => editor.chain().focus().toggleOrderedList().run(),
+      active: editor.isActive('orderedList')
+    },
+    {
+      label: 'Checklist',
+      run: () => editor.chain().focus().toggleTaskList().run(),
+      active: editor.isActive('taskList')
+    },
+    {
+      label: 'Insert Table (3x3)',
+      run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+    },
+    { label: 'Insert Callout Box', run: () => editor.chain().focus().setCallout().run() },
+    {
+      label: 'Code Block',
+      run: () => editor.chain().focus().toggleCodeBlock().run(),
+      active: editor.isActive('codeBlock')
+    },
+    {
+      label: 'Quote Block',
+      run: () => editor.chain().focus().toggleBlockquote().run(),
+      active: editor.isActive('blockquote')
+    },
+    { label: 'Horizontal Divider', run: () => editor.chain().focus().setHorizontalRule().run() }
+  ]
   return (
-    <div className="editor-toolbar flex h-10 w-full shrink-0 items-center justify-between border-b border-border bg-surface px-2 select-none">
-      <div className="flex items-center gap-0.5 overflow-x-auto py-1">
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().undo().run()}
-          disabled={!editor.can().undo()}
-          className="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-surface-raised disabled:opacity-30"
-          title="Undo (Ctrl+Z)"
-        >
-          <Undo2 size={13} />
-        </button>
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo()}
-          className="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-surface-raised disabled:opacity-30"
-          title="Redo (Ctrl+Y)"
-        >
-          <Redo2 size={13} />
-        </button>
-
-        <div className="mx-1 h-4 w-px bg-border" />
-
-        <div className="flex items-center rounded border border-border bg-surface-raised px-1.5 py-0.5 text-xs">
-          <span className="w-12 text-center font-medium text-text-primary">{currentHeading}</span>
-          <div className="ml-1 flex gap-0.5">
-            <button
-              type="button"
-              onClick={(): boolean => editor.chain().focus().setParagraph().run()}
-              className={cn(
-                'rounded px-1 text-[10px] hover:bg-surface',
-                currentHeading === 'Normal' && 'font-bold text-accent'
-              )}
-            >
-              P
-            </button>
-            <button
-              type="button"
-              onClick={(): boolean => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-              className={cn(
-                'rounded px-1 text-[10px] hover:bg-surface',
-                currentHeading === 'H1' && 'font-bold text-accent'
-              )}
-            >
-              H1
-            </button>
-            <button
-              type="button"
-              onClick={(): boolean => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-              className={cn(
-                'rounded px-1 text-[10px] hover:bg-surface',
-                currentHeading === 'H2' && 'font-bold text-accent'
-              )}
-            >
-              H2
-            </button>
-            <button
-              type="button"
-              onClick={(): boolean => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-              className={cn(
-                'rounded px-1 text-[10px] hover:bg-surface',
-                currentHeading === 'H3' && 'font-bold text-accent'
-              )}
-            >
-              H3
-            </button>
-          </div>
-        </div>
-
-        <div className="mx-1 h-4 w-px bg-border" />
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleBold().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('bold')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Bold (Ctrl+B)"
-        >
-          <Bold size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleItalic().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('italic')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Italic (Ctrl+I)"
-        >
-          <Italic size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleUnderline().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('underline')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Underline (Ctrl+U)"
-        >
-          <UnderlineIcon size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleStrike().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('strike')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Strikethrough"
-        >
-          <Strikethrough size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleHighlight().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('highlight')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Highlight"
-        >
-          <Highlighter size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleCode().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('code')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Inline Code"
-        >
-          <Code size={13} />
-        </button>
-
-        <div className="mx-1 h-4 w-px bg-border" />
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().setTextAlign('left').run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive({ textAlign: 'left' })
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Align Left"
-        >
-          <AlignLeft size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().setTextAlign('center').run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive({ textAlign: 'center' })
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Align Center"
-        >
-          <AlignCenter size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().setTextAlign('right').run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive({ textAlign: 'right' })
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Align Right"
-        >
-          <AlignRight size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().setTextAlign('justify').run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive({ textAlign: 'justify' })
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Justify"
-        >
-          <AlignJustify size={13} />
-        </button>
-
-        <div className="mx-1 h-4 w-px bg-border" />
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleBulletList().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('bulletList')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Bullet List"
-        >
-          <List size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleOrderedList().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('orderedList')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Numbered List"
-        >
-          <ListOrdered size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleTaskList().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('taskList')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Checklist"
-        >
-          <CheckSquare size={13} />
-        </button>
-
-        <div className="mx-1 h-4 w-px bg-border" />
-
-        <button
-          type="button"
-          onClick={(): boolean =>
-            editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+    <div
+      className="editor-toolbar flex items-center gap-1"
+      role="group"
+      aria-label="Text formatting"
+    >
+      <Menu.Root
+        onOpenChange={open => {
+          if (open) {
+            actionSelected.current = false
           }
-          className="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-surface-raised hover:text-text-primary"
-          title="Insert Table (3x3)"
+        }}
+      >
+        <Menu.Trigger
+          className="block-style flex h-7 min-w-20 items-center justify-between gap-2 rounded-sm px-2 text-xs text-text-secondary hover:bg-surface-raised"
+          aria-label="Block style"
         >
-          <TableIcon size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().setCallout().run()}
-          className="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-surface-raised hover:text-text-primary"
-          title="Insert Callout Box"
-        >
-          <AlertCircle size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleCodeBlock().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('codeBlock')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Code Block"
-        >
-          <Code2 size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().toggleBlockquote().run()}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded transition-colors',
-            editor.isActive('blockquote')
-              ? 'bg-accent/15 text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title="Quote Block"
-        >
-          <Quote size={13} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(): boolean => editor.chain().focus().setHorizontalRule().run()}
-          className="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-surface-raised hover:text-text-primary"
-          title="Horizontal Divider"
-        >
-          <Minus size={13} />
-        </button>
-      </div>
-
-      <div className="flex items-center gap-1.5 pl-2">
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className={cn(
-            'flex h-7 items-center gap-1 rounded px-2 text-xs transition-colors',
-            sidebarOpen
-              ? 'bg-accent/15 font-medium text-accent'
-              : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-          )}
-          title={sidebarOpen ? 'Hide Outline' : 'Show Outline & Stats'}
-        >
-          <ListTree size={13} />
-          <span className="hidden sm:inline">Outline</span>
-        </button>
-
-        <div className="relative">
-          <button
-            type="button"
-            onClick={(): void => setExportOpen(!exportOpen)}
-            disabled={isExporting}
-            className="flex h-7 items-center gap-1 rounded bg-accent px-2.5 text-xs font-medium text-white shadow-xs hover:bg-accent-hover disabled:opacity-50"
-            title="Export Document"
+          {headingLabel}
+          <ChevronDown size={12} />
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Content
+            className="menu-content"
+            sideOffset={5}
+            align="start"
+            onCloseAutoFocus={restoreMenuFocus}
           >
-            <Download size={12} />
-            <span>Export</span>
-            <ChevronDown size={11} />
-          </button>
-
-          {exportOpen && (
-            <div className="absolute right-0 top-8 z-50 w-44 rounded-lg border border-border bg-surface-overlay p-1 shadow-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  void handleExport('pdf')
-                }}
-                className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs text-text-primary hover:bg-surface-raised"
+            <Menu.Item
+              className="menu-item"
+              onSelect={() => applyAction(() => editor.chain().focus().setParagraph().run())}
+            >
+              Normal
+            </Menu.Item>
+            {([1, 2, 3, 4, 5, 6] as const).map(level => (
+              <Menu.Item
+                key={level}
+                className="menu-item"
+                onSelect={() =>
+                  applyAction(() => editor.chain().focus().toggleHeading({ level }).run())
+                }
               >
-                <FileDown size={13} className="text-red-500" />
-                <span>Export as PDF</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void handleExport('html')
-                }}
-                className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs text-text-primary hover:bg-surface-raised"
+                Heading {level}
+              </Menu.Item>
+            ))}
+          </Menu.Content>
+        </Menu.Portal>
+      </Menu.Root>
+      <button
+        type="button"
+        className={cn('toolbar-button', editor.isActive('bold') && 'toolbar-button-active')}
+        aria-label="Bold"
+        aria-pressed={editor.isActive('bold')}
+        title="Bold (Ctrl+B)"
+        onClick={() => editor.chain().focus().toggleBold().run()}
+      >
+        <Bold size={15} />
+      </button>
+      <button
+        type="button"
+        className={cn('toolbar-button', editor.isActive('italic') && 'toolbar-button-active')}
+        aria-label="Italic"
+        aria-pressed={editor.isActive('italic')}
+        title="Italic (Ctrl+I)"
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+      >
+        <Italic size={15} />
+      </button>
+      <button
+        type="button"
+        className={cn(
+          'toolbar-button format-secondary',
+          editor.isActive('bulletList') && 'toolbar-button-active'
+        )}
+        aria-label="Bullet List"
+        title="Bullet List"
+        aria-pressed={editor.isActive('bulletList')}
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+      >
+        <List size={16} />
+      </button>
+      <button
+        type="button"
+        className="toolbar-button format-secondary"
+        aria-label="Insert Table (3x3)"
+        title="Insert Table (3x3)"
+        onClick={() =>
+          editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+        }
+      >
+        <TableIcon size={15} />
+      </button>
+      <Menu.Root
+        onOpenChange={open => {
+          if (open) {
+            actionSelected.current = false
+          }
+        }}
+      >
+        <Menu.Trigger
+          className="toolbar-button"
+          aria-label="More formatting"
+          title="More formatting"
+        >
+          <MoreHorizontal size={16} />
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Content
+            className="menu-content max-h-[70vh] overflow-auto"
+            sideOffset={5}
+            align="start"
+            onCloseAutoFocus={restoreMenuFocus}
+          >
+            <div className="format-compact-headings">
+              <Menu.Label className="px-3 py-1 text-[11px] text-text-muted">Block style</Menu.Label>
+              <Menu.Item
+                className="menu-item"
+                onSelect={() => applyAction(() => editor.chain().focus().setParagraph().run())}
               >
-                <Globe size={13} className="text-blue-500" />
-                <span>Export as HTML</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void handleExport('txt')
-                }}
-                className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs text-text-primary hover:bg-surface-raised"
-              >
-                <FileText size={13} className="text-emerald-500" />
-                <span>Export Plain Text</span>
-              </button>
+                Normal
+              </Menu.Item>
+              {([1, 2, 3, 4, 5, 6] as const).map(level => (
+                <Menu.Item
+                  key={level}
+                  className="menu-item"
+                  onSelect={() =>
+                    applyAction(() => editor.chain().focus().toggleHeading({ level }).run())
+                  }
+                >
+                  Heading {level}
+                </Menu.Item>
+              ))}
+              <Menu.Separator className="menu-separator" />
             </div>
-          )}
-        </div>
-      </div>
+            {actions.map(action =>
+              action.active !== undefined ? (
+                <Menu.CheckboxItem
+                  key={action.label}
+                  className="menu-item"
+                  checked={action.active}
+                  disabled={action.disabled}
+                  onSelect={() => applyAction(action.run)}
+                >
+                  {action.label}
+                </Menu.CheckboxItem>
+              ) : (
+                <Menu.Item
+                  key={action.label}
+                  className="menu-item"
+                  disabled={action.disabled}
+                  onSelect={() => applyAction(action.run)}
+                >
+                  {action.label}
+                </Menu.Item>
+              )
+            )}
+          </Menu.Content>
+        </Menu.Portal>
+      </Menu.Root>
     </div>
   )
 }

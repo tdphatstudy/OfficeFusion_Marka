@@ -82,7 +82,7 @@ const waitContent = async text => {
 }
 
 try {
-  await page.getByRole('button', { name: 'Source', exact: true }).click()
+  await page.getByRole('button', { name: 'Markdown', exact: true }).click()
   await source().waitFor()
   await app.evaluate(
     ({ dialog }, filePath) => {
@@ -389,12 +389,12 @@ try {
     passed('WSL opens and saves only a generated Linux /tmp fixture')
     await openHub()
   }
-  await page.screenshot({ path: resolve(root, 'connections-light.png') })
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'connections-light.png') })
   await page.getByRole('button', { name: 'Close connections', exact: true }).click()
   await page.getByRole('button', { name: 'Switch to Dark mode', exact: true }).click()
   await openHub()
   await choose('SSH')
-  await page.screenshot({ path: resolve(root, 'connections-dark.png') })
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'connections-dark.png') })
   assert.deepEqual(errors, [])
   passed('Connection Hub screenshots captured in Light and Dark with no renderer errors')
   await page.getByRole('button', { name: 'Close connections', exact: true }).click()
@@ -418,7 +418,9 @@ try {
   passed('Closing the renderer clears cached credentials while the main process stays alive')
   console.log(JSON.stringify({ passed: checks.length, artifacts: root }, null, 2))
 } catch (error) {
-  await page.screenshot({ path: resolve(root, 'failure.png') }).catch(() => undefined)
+  await page
+    .screenshot({ animations: 'disabled', path: resolve(root, 'failure.png') })
+    .catch(() => undefined)
   console.error('Renderer errors:', errors)
   throw error
 } finally {

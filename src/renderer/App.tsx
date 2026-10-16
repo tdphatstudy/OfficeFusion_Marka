@@ -10,6 +10,8 @@ import { CommandPalette } from '@/components/layout/CommandPalette'
 import { SettingsDialog } from '@/components/layout/SettingsDialog'
 import { Notifications } from '@/components/layout/Notifications'
 import { ConnectionHub } from '@/components/layout/ConnectionHub'
+import { DocumentToolbar } from '@/components/layout/DocumentToolbar'
+import { useCompactLayout } from '@/hooks/useCompactLayout'
 
 const RichEditor = lazy(() =>
   import('@/components/editor/RichEditor').then(module => ({ default: module.RichEditor }))
@@ -42,78 +44,84 @@ const EditorWorkspace: FC = () => {
 
   const split = effectiveMode === 'split'
   return (
-    <div
-      ref={workspace}
-      className="editor-workspace flex min-h-0 min-w-0 flex-1 overflow-hidden"
-      data-mode={effectiveMode}
-    >
-      <Suspense
-        fallback={
-          <div
-            role="status"
-            className="flex flex-1 items-center justify-center text-sm text-text-muted"
-          >
-            Preparing your writing space…
-          </div>
-        }
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {effectiveMode !== 'rich' && <DocumentToolbar />}
+      <div
+        ref={workspace}
+        className="editor-workspace flex min-h-0 min-w-0 flex-1 overflow-hidden"
+        data-mode={effectiveMode}
       >
-        {effectiveMode === 'rich' ? (
-          <RichEditor key={documentId} />
-        ) : (
-          <>
+        <Suspense
+          fallback={
             <div
-              className="source-pane flex min-h-0 min-w-0 flex-col overflow-hidden"
-              style={{ flexBasis: split ? `${ratio}%` : '100%' }}
+              role="status"
+              className="flex flex-1 items-center justify-center text-sm text-text-muted"
             >
-              <SourceEditor />
+              Preparing your writing space…
             </div>
-            {split && (
-              <>
-                <div
-                  role="separator"
-                  tabIndex={0}
-                  aria-label="Resize source and preview"
-                  aria-orientation="vertical"
-                  aria-valuemin={25}
-                  aria-valuemax={75}
-                  aria-valuenow={ratio}
-                  className="split-divider"
-                  onKeyDown={event => {
-                    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                      event.preventDefault()
-                      setRatio(current =>
-                        Math.max(25, Math.min(75, current + (event.key === 'ArrowRight' ? 5 : -5)))
-                      )
-                    }
-                  }}
-                  onDoubleClick={() => setRatio(50)}
-                  onPointerDown={event => {
-                    event.currentTarget.setPointerCapture(event.pointerId)
-                  }}
-                  onPointerMove={event => {
-                    if (
-                      event.currentTarget.hasPointerCapture(event.pointerId) &&
-                      workspace.current
-                    ) {
-                      const bounds = workspace.current.getBoundingClientRect()
-                      setRatio(
-                        Math.max(
-                          25,
-                          Math.min(75, ((event.clientX - bounds.left) / bounds.width) * 100)
+          }
+        >
+          {effectiveMode === 'rich' ? (
+            <RichEditor key={documentId} />
+          ) : (
+            <>
+              <div
+                className="source-pane flex min-h-0 min-w-0 flex-col overflow-hidden"
+                style={{ flexBasis: split ? `${ratio}%` : '100%' }}
+              >
+                <SourceEditor />
+              </div>
+              {split && (
+                <>
+                  <div
+                    role="separator"
+                    tabIndex={0}
+                    aria-label="Resize source and preview"
+                    aria-orientation="vertical"
+                    aria-valuemin={25}
+                    aria-valuemax={75}
+                    aria-valuenow={ratio}
+                    className="split-divider"
+                    onKeyDown={event => {
+                      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                        event.preventDefault()
+                        setRatio(current =>
+                          Math.max(
+                            25,
+                            Math.min(75, current + (event.key === 'ArrowRight' ? 5 : -5))
+                          )
                         )
-                      )
-                    }
-                  }}
-                  onPointerUp={event => {
-                    event.currentTarget.releasePointerCapture(event.pointerId)
-                  }}
-                />
-                <MarkdownPreview key={documentId} />
-              </>
-            )}
-          </>
-        )}
-      </Suspense>
+                      }
+                    }}
+                    onDoubleClick={() => setRatio(50)}
+                    onPointerDown={event => {
+                      event.currentTarget.setPointerCapture(event.pointerId)
+                    }}
+                    onPointerMove={event => {
+                      if (
+                        event.currentTarget.hasPointerCapture(event.pointerId) &&
+                        workspace.current
+                      ) {
+                        const bounds = workspace.current.getBoundingClientRect()
+                        setRatio(
+                          Math.max(
+                            25,
+                            Math.min(75, ((event.clientX - bounds.left) / bounds.width) * 100)
+                          )
+                        )
+                      }
+                    }}
+                    onPointerUp={event => {
+                      event.currentTarget.releasePointerCapture(event.pointerId)
+                    }}
+                  />
+                  <MarkdownPreview key={documentId} />
+                </>
+              )}
+            </>
+          )}
+        </Suspense>
+      </div>
     </div>
   )
 }
@@ -145,7 +153,9 @@ const App: FC = () => {
   useKeyboardShortcuts()
   useDocumentLifecycle()
   const sidebarOpen = useUIStore(state => state.sidebarOpen)
+  const compactSidebarOpen = useUIStore(state => state.compactSidebarOpen)
   const focusMode = useUIStore(state => state.focusMode)
+  const compact = useCompactLayout()
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -156,7 +166,7 @@ const App: FC = () => {
         <TitleBar />
         <RecoveryBanner />
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {sidebarOpen && !focusMode && <Sidebar />}
+          {(compact ? compactSidebarOpen : sidebarOpen) && !focusMode && <Sidebar />}
           <main
             aria-label="Document editor"
             className="flex min-w-0 flex-1 flex-col overflow-hidden"

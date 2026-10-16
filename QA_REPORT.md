@@ -110,3 +110,46 @@ disconnect sau commit có thể khiến kết quả lưu không chắc chắn. L
 local hiện tại, chưa có conflict detection/atomic replacement. Chưa kiểm thử installer và native UI
 macOS/Linux; không có benchmark startup/memory toàn app. Chi tiết ở
 [CONNECTIONS.md](./CONNECTIONS.md).
+
+## Đợt 3 — Hướng thiết kế ngòi bút và document shell (16/10/2026)
+
+Người dùng chọn concept 01 — ngòi bút — sau khảo sát tài liệu chính thức và review các hướng thiết
+kế. Logo Light/Dark giữ cùng hình học; icon desktop thêm keyline cho nền thay đổi. Đã kiểm tra
+counter/slit trong suốt, chín kích thước PNG, container ICNS và xem bản native 16/24/32/48 px.
+
+Titlebar giữ app/tài liệu/window controls. File/Edit/View nhóm lệnh thật; document toolbar giữ
+Write/Markdown/Split và định dạng theo editor đang mount. Canvas viết liên tục, outline gọn, đường
+dẫn chỉ ở status bar. Outline ở cửa sổ nhỏ dùng state riêng, không ghi đè preference desktop. Các
+quy ước dùng chung OfficeFusion hiện là đề xuất; chưa có app/brand book khác để đối chiếu.
+
+Review độc lập đã kiểm tra routing lệnh, guard Markdown, dirty/recovery, ownership của editor và
+cleanup history listener. Đã sửa các finding và lỗi kiểm thử phát hiện:
+
+- Toggle định dạng trong menu có checkbox semantics và dấu check trang trí, không chèn dấu vào
+  accessible name của lệnh.
+- Lệnh editor từ Edit chạy sau khi menu đóng: Undo/Redo trả focus đúng ở cả hai engine, Find không
+  bị focus trap lấy lại ô tìm kiếm. Native test kiểm tra gõ tiếp ngay sau history action.
+- Outline bỏ thẻ inline HTML ở tiêu đề có underline/highlight và không nhận heading trong HTML pre.
+
+Regression **48/48 pass**, gồm test mới cho heading có rich formatting. Connection smoke **19/19
+pass** với password/key/passphrase tự sinh trên localhost và file fixture WSL `/tmp`. Reviewer đã
+xem ảnh Connection Hub Light/Dark và không phát hiện lỗi bố cục chặn luồng trong các ảnh đó.
+
+Editor/export smoke trên build cuối: **26/26 pass**, không có renderer errors. Ngoài các luồng cũ,
+test kiểm tra selection qua Bold/Heading/Underline, accessible checked state khi mở lại menu, Edit
+Undo/Redo và gõ tiếp ở cả hai engine, Edit Find nhận input, View menu giữ guard, compact outline giữ
+preference desktop và Write ở 800×600 vẫn truy cập được các định dạng qua overflow. Source 10.000
+dòng mở khoảng **132 ms** ở lượt này, DOM vẫn được virtualize.
+
+Lint, TypeScript main/preload và renderer, production build, formatting và Git whitespace check
+pass. Đã xem ảnh thật của Write/Split Light/Dark, Settings Dark, Connection Hub và cửa sổ nhỏ; không
+còn lỗi chặn luồng được phát hiện trong phạm vi đã kiểm tra.
+
+Đã tính 30 cặp token chữ/nền Light/Dark, gồm surface thường/raised/overlay/canvas, selected action
+và filled action/hover. Thấp nhất **4,51:1**. Đây là kiểm tra token, không phải chứng nhận
+accessibility toàn ứng dụng.
+
+Quy ước thiết kế, nguồn khảo sát và cách tạo lại asset ở [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md).
+Không thêm dependency hoặc thay đổi SSH authentication trong đợt này. Các giới hạn native
+macOS/Linux, installer, user study, screen reader audit và startup/memory benchmark ở trên vẫn áp
+dụng.

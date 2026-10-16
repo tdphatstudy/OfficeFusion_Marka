@@ -19,10 +19,10 @@ export const Notifications: FC = () => {
   return (
     <div
       role={notice.error ? 'alert' : 'status'}
-      className="fixed bottom-10 right-4 z-[100] flex max-w-[min(460px,90vw)] items-start gap-3 rounded-xl border border-border bg-surface-raised p-4 text-sm shadow-xl"
+      className="fixed bottom-10 right-4 z-[100] flex max-w-[min(460px,90vw)] items-start gap-3 rounded border border-border bg-surface p-3 text-xs shadow-lg"
     >
       {notice.error ? (
-        <AlertCircle size={18} className="mt-0.5 shrink-0 text-accent" />
+        <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-700 dark:text-red-400" />
       ) : (
         <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-accent" />
       )}

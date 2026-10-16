@@ -1,6 +1,6 @@
 import MarkdownIt from 'markdown-it'
 
-const outlineParser = new MarkdownIt()
+const outlineParser = new MarkdownIt({ html: true })
 
 export interface DocumentHeading {
   level: number
@@ -22,7 +22,7 @@ export function getHeadings(markdown: string): DocumentHeading[] {
           inline.children
             ?.filter(child => ['text', 'code_inline', 'image'].includes(child.type))
             .map(child => child.content)
-            .join('') || inline.content,
+            .join('') ?? inline.content,
         line: token.map[0] + 1,
         index: headings.length
       })

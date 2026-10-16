@@ -27,7 +27,7 @@ interface EditorState {
 }
 
 const welcome =
-  '# Welcome to Marka\n\nYour writing space in OfficeFusion.\n\nType `/` to insert a block, or open Commands to explore shortcuts and templates.\n'
+  '# Welcome to Marka\n\nMarkdown editor by OfficeFusion.\n\nOpen a document from the File menu, or start writing here.\n\nUse Markdown to edit source, Split to preview, and Commands to find available actions.\n'
 const draft = readDraft()
 
 export const useEditorStore = create<EditorState>()(

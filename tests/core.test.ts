@@ -254,6 +254,19 @@ test('word counts retain link labels and ignore code blocks', () => {
   )
 })
 
+test('outline displays formatted heading text without HTML tags or code-block impostors', () => {
+  const headings = getHeadings(
+    '## <u>**Review** &amp; handover</u>\n\n## <mark>Ready</mark>\n\n<pre>\n# Not a heading\n</pre>'
+  )
+  assert.deepEqual(
+    headings.map(({ text, line }) => ({ text, line })),
+    [
+      { text: 'Review & handover', line: 1 },
+      { text: 'Ready', line: 3 }
+    ]
+  )
+})
+
 test('preview supports GFM, footnotes, math and source positions', () => {
   const html = renderMarkdown(
     '# Intro\n\n- [x] Done\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n$x^2$\n\nNote[^one]\n\n[^one]: Footnote'

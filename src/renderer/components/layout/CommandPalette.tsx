@@ -83,9 +83,9 @@ const CommandList: FC = () => {
             onClick={() => execute(index)}
             onMouseMove={() => setActive(index)}
             className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm',
+              'flex w-full items-center gap-3 rounded-sm px-3 py-2 text-left text-sm',
               active === index
-                ? 'bg-accent/10 text-accent'
+                ? 'bg-surface-overlay text-text-primary'
                 : 'text-text-primary hover:bg-surface-raised'
             )}
           >

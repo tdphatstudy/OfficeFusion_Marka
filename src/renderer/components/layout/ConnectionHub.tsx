@@ -14,7 +14,6 @@ import {
   BookmarkPlus,
   Clock
 } from 'lucide-react'
-import { BrandMark } from './BrandMark'
 import { fileActions } from '@/lib/fileActions'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -196,15 +195,12 @@ const ConnectionForm: FC = () => {
 
   return (
     <>
-      <div className="flex items-start justify-between gap-3 border-b border-border p-5">
+      <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
         <div className="flex items-center gap-3">
-          <BrandMark size={42} />
           <div>
-            <Dialog.Title className="text-xl font-semibold tracking-tight">
-              Your documents, anywhere.
-            </Dialog.Title>
+            <Dialog.Title className="text-base font-semibold">Open document</Dialog.Title>
             <Dialog.Description className="mt-1 text-xs text-text-secondary">
-              Open a file on your computer, in Linux, or on a trusted host.
+              Select a local file, remote host, or network location.
             </Dialog.Description>
           </div>
         </div>
@@ -231,7 +227,7 @@ const ConnectionForm: FC = () => {
                 setPath('')
                 setError('')
               }}
-              className={`mb-1 flex w-full items-center gap-2 rounded-lg p-3 text-left transition-colors disabled:opacity-50 ${kind === method.id ? 'bg-accent/10 text-accent' : 'text-text-secondary hover:bg-surface-overlay'}`}
+              className={`mb-1 flex w-full items-center gap-2 rounded-sm border-l-2 px-3 py-2 text-left transition-colors disabled:opacity-50 ${kind === method.id ? 'border-accent bg-surface-overlay text-text-primary' : 'border-transparent text-text-secondary hover:bg-surface-overlay'}`}
             >
               <method.icon size={17} className="shrink-0" />
               <span>
@@ -255,9 +251,8 @@ const ConnectionForm: FC = () => {
         <div className="min-w-0 p-5">
           <form onSubmit={submit} className="space-y-4">
             {kind === 'local' ? (
-              <div className="rounded-xl border border-dashed border-border bg-surface-raised p-5">
-                <FolderOpen size={28} className="mb-3 text-accent" />
-                <h3 className="text-sm font-semibold">Pick up where your ideas live.</h3>
+              <div className="py-1">
+                <h3 className="text-sm font-semibold">Open from this computer</h3>
                 <p className="mt-2 text-xs leading-relaxed text-text-secondary">
                   Open Markdown and text files. Mapped network drives and cloud folders synced to
                   this computer work here too.
@@ -515,9 +510,7 @@ const ConnectionForm: FC = () => {
           </form>
           {profiles.length > 0 && (
             <div className="mt-5 border-t border-border pt-4">
-              <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                Saved connections
-              </h3>
+              <h3 className="mb-2 text-xs font-semibold text-text-secondary">Saved connections</h3>
               {profiles.map(profile => (
                 <div key={profile.id} className="flex items-center gap-2">
                   <button
@@ -546,7 +539,7 @@ const ConnectionForm: FC = () => {
           )}
           {recent.length > 0 && (
             <div className="mt-5 border-t border-border pt-4">
-              <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-text-secondary">
                 <span className="flex items-center gap-1.5">
                   <Clock size={12} />
                   Recently opened

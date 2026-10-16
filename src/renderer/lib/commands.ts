@@ -5,13 +5,13 @@ import type { ViewMode } from '@/types/editor'
 
 export function richModeLimitation(content: string): string | null {
   if (content.length > 100_000) {
-    return 'Large documents use Source or Split for faster editing.'
+    return 'Large documents use Markdown or Split for faster editing.'
   }
   if (
     /^---\r?\n/.test(content) ||
     /\$\$|\$[^$\n]+\$|\[\^[^\]]+\]|^\s*```mermaid\b/m.test(content)
   ) {
-    return 'This document uses syntax best preserved in Source or Split (frontmatter, math, footnotes or diagrams).'
+    return 'This document uses syntax best preserved in Markdown or Split (frontmatter, math, footnotes or diagrams).'
   }
   return null
 }
@@ -79,21 +79,21 @@ export const appCommands: AppCommand[] = [
   },
   {
     id: 'find',
-    label: 'Find and replace in source',
+    label: 'Find and replace in Markdown',
     group: 'Edit',
     shortcut: 'Mod F',
     run: findInDocument
   },
   {
     id: 'rich',
-    label: 'Rich editor',
+    label: 'Write mode',
     group: 'View',
     shortcut: 'Mod Shift R',
     run: () => changeViewMode('rich')
   },
   {
     id: 'source',
-    label: 'Markdown source',
+    label: 'Markdown mode',
     group: 'View',
     shortcut: 'Mod Shift M',
     run: () => changeViewMode('source')

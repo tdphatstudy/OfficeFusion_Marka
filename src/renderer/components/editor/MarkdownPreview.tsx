@@ -69,7 +69,7 @@ export const MarkdownPreview: FC = () => {
       className="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface"
     >
       <div className="pane-heading">
-        <span>LIVE PREVIEW</span>
+        <span>Preview</span>
         <span>{status}</span>
       </div>
       <div className="preview-scroll flex-1 overflow-auto p-6">

@@ -56,12 +56,69 @@ try {
   assert.match(await readFile(target, 'utf8'), /Immediate save from rich editor/)
   passed('Rich edits are saved immediately through real file IPC')
 
-  await page.getByRole('button', { name: 'Source', exact: true }).click()
+  await page.getByRole('button', { name: 'Edit menu', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Undo/ }).click()
+  assert.doesNotMatch(await rich.innerText(), /Immediate save from rich editor/)
+  await page.getByRole('button', { name: 'Edit menu', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Redo/ }).click()
+  assert.match(await rich.innerText(), /Immediate save from rich editor/)
+  await page.waitForFunction(() => document.activeElement?.classList.contains('tiptap'))
+  await page.keyboard.press('End')
+  await page.keyboard.type(' continued')
+  assert.match(await rich.innerText(), /continued/)
+  passed('Edit menu routes Undo and Redo to the mounted writing editor')
+
+  await rich.fill('Selection formatting')
+  await rich.press('Control+a')
+  await page.getByRole('button', { name: 'Bold', exact: true }).click()
+  assert.equal(await rich.locator('strong').innerText(), 'Selection formatting')
+  await page.getByRole('button', { name: 'Block style', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Heading 2', exact: true }).click()
+  assert.equal(await rich.locator('h2 strong').innerText(), 'Selection formatting')
+  await page.getByRole('button', { name: 'More formatting', exact: true }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Underline (Ctrl+U)', exact: true }).click()
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
+  assert.equal(await rich.locator('h2 u').innerText(), 'Selection formatting')
+  assert.equal(await rich.evaluate(element => element.contains(document.activeElement)), true)
+  await page.getByRole('button', { name: 'More formatting', exact: true }).click()
+  assert.equal(
+    await page
+      .getByRole('menuitemcheckbox', { name: 'Underline (Ctrl+U)', exact: true })
+      .getAttribute('aria-checked'),
+    'true'
+  )
+  await page.keyboard.press('Escape')
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
+  passed('Formatting buttons and menus preserve text selection and return focus to writing')
+
+  await page.getByRole('button', { name: 'Markdown', exact: true }).click()
   const source = page.getByRole('textbox', { name: 'Markdown source' })
   await source.waitFor()
+  await source.fill('Source history roundtrip')
+  await page.getByRole('button', { name: 'Edit menu', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Undo/ }).click()
+  assert.doesNotMatch(await source.innerText(), /Source history roundtrip/)
+  await page.getByRole('button', { name: 'Edit menu', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Redo/ }).click()
+  assert.equal(await source.innerText(), 'Source history roundtrip')
+  await page.waitForFunction(() => document.activeElement?.classList.contains('cm-content'))
+  await page.keyboard.press('End')
+  await page.keyboard.type(' continued')
+  assert.match(await source.innerText(), /roundtrip continued/)
+  passed('Edit menu routes Undo and Redo to CodeMirror after switching editors')
   await source.fill(
     '# Intro\n\nParagraph with **bold**.\n\n## Details\n\n- [x] Done\n\n$x^2$\n\n[^note]: A footnote'
   )
+  const protectedMarkdown = await source.innerText()
+  await page.getByRole('button', { name: 'View menu', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: /^Write/ }).click()
+  assert.equal(await source.innerText(), protectedMarkdown)
+  assert.equal(
+    await page.getByRole('button', { name: 'Markdown', exact: true }).getAttribute('aria-pressed'),
+    'true'
+  )
+  assert.equal(await page.locator('.tiptap').count(), 0)
+  passed('View menu preserves unsupported Markdown when Write mode is guarded')
   await page.getByRole('button', { name: 'Split', exact: true }).click()
   await page.locator('.markdown-preview .katex').waitFor()
   assert.equal(await page.locator('.markdown-preview strong').innerText(), 'bold')
@@ -81,9 +138,14 @@ try {
   assert.equal(await divider.getAttribute('aria-valuenow'), '55')
   passed('Split divider supports keyboard resizing')
 
-  await page.keyboard.press('Control+f')
+  await page.getByRole('button', { name: 'Edit menu', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Find in document/ }).click()
   await page.locator('.cm-search input[name="search"]').waitFor({ state: 'visible' })
-  await page.locator('.cm-search input[name="search"]').fill('Paragraph')
+  await page.waitForFunction(() =>
+    document.activeElement?.matches('.cm-search input[name="search"]')
+  )
+  await page.keyboard.type('Paragraph')
+  assert.equal(await page.locator('.cm-search input[name="search"]').inputValue(), 'Paragraph')
   await page.locator('.cm-search input[name="replace"]').fill('Replaced')
   await page.locator('.cm-search button[name="replaceAll"]').click()
   assert.match(await source.innerText(), /Replaced with/)
@@ -108,6 +170,7 @@ try {
   await page.getByRole('button', { name: 'Editor settings', exact: true }).click()
   await page.getByLabel('Show line numbers', { exact: true }).uncheck()
   await page.getByLabel('Tab size', { exact: true }).selectOption('4')
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'settings-dark.png') })
   await page.getByRole('button', { name: 'Close settings' }).click()
   assert.equal(await page.locator('.cm-lineNumbers').count(), 0)
   passed('Editor preferences reconfigure CodeMirror without losing content')
@@ -174,7 +237,7 @@ try {
     '# Large file\n\n' +
     Array.from({ length: 10_000 }, (_, index) => `Line ${index}: plain text.`).join('\n')
   await writeFile(opened, large)
-  await page.getByRole('button', { name: 'Source', exact: true }).click()
+  await page.getByRole('button', { name: 'Markdown', exact: true }).click()
   const start = performance.now()
   await page.keyboard.press('Control+o')
   await page.waitForFunction(() =>
@@ -197,6 +260,16 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
   passed('Minimum desktop size keeps the shell within the viewport')
 
+  const outline = page.getByRole('complementary', { name: 'Document outline and details' })
+  assert.equal(await outline.count(), 0)
+  for (const label of ['Write', 'Markdown', 'Split']) {
+    assert.equal(await page.getByRole('button', { name: label, exact: true }).isVisible(), true)
+  }
+  await page.getByRole('button', { name: 'Toggle outline', exact: true }).click()
+  await outline.waitFor()
+  await page.getByRole('button', { name: 'Toggle outline', exact: true }).click()
+  assert.equal(await outline.count(), 0)
+
   await page.getByRole('button', { name: 'Split', exact: true }).click()
   await page.locator('.markdown-preview').waitFor()
   assert.equal(
@@ -213,22 +286,57 @@ try {
     sourceBounds && previewBounds && previewBounds.y >= sourceBounds.y + sourceBounds.height - 2
   )
   passed('Split stacks vertically at the minimum window width')
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'workspace-minimum.png') })
 
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0].setSize(1280, 800)
   })
+  await outline.waitFor()
+  passed('Compact outline state preserves desktop preference and keeps all mode labels visible')
   await writeFile(
     opened,
-    '# Marka workspace\n\n## Write with focus\n\nA comfortable space for **clear ideas**.\n\n- [x] Source editing\n- [x] Live preview\n- [ ] Your next draft\n\n## Plan your work\n\n| Step | Status |\n| --- | --- |\n| Explore | Done |\n| Create | In progress |\n'
+    '# Project brief\n\n## Goals\n\nPrepare a **clear handover** for the next release.\n\n- [x] Confirm requirements\n- [x] Review architecture\n- [ ] Collect feedback\n\n## Delivery plan\n\n| Step | Status |\n| --- | --- |\n| Research | Done |\n| Implementation | In progress |\n'
   )
   await page.keyboard.press('Control+o')
   await page.getByRole('button', { name: 'Split', exact: true }).click()
   await page.locator('.markdown-preview table').waitFor()
-  await page.screenshot({ path: resolve(root, 'workspace-light.png') })
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'workspace-light.png') })
   await page.getByRole('button', { name: 'Editor settings', exact: true }).click()
   await page.getByLabel('Appearance', { exact: true }).selectOption('dark')
   await page.getByRole('button', { name: 'Close settings' }).click()
-  await page.screenshot({ path: resolve(root, 'workspace-dark.png') })
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'workspace-dark.png') })
+  await page.getByRole('button', { name: 'Write', exact: true }).click()
+  await page.locator('.tiptap table').waitFor()
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'writing-dark.png') })
+  await page.getByRole('button', { name: 'Switch to Light mode', exact: true }).click()
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'writing-light.png') })
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].setSize(800, 600)
+  })
+  await page.waitForFunction(() => innerWidth <= 900)
+  await page.getByRole('button', { name: 'Toggle outline', exact: true }).click()
+  await outline.waitFor()
+  assert.equal(
+    await page
+      .locator('.document-toolbar')
+      .evaluate(element => element.scrollWidth > element.clientWidth),
+    false
+  )
+  for (const label of ['Write', 'Markdown', 'Split', 'More formatting']) {
+    assert.equal(await page.getByRole('button', { name: label, exact: true }).isVisible(), true)
+  }
+  await page.getByRole('button', { name: 'More formatting', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Heading 3', exact: true }).waitFor({ state: 'visible' })
+  await page.keyboard.press('Escape')
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'writing-minimum.png') })
+  passed('Writing at minimum width with outline retains mode labels and overflow formatting')
+  await page.getByRole('button', { name: 'Toggle outline', exact: true }).click()
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].setSize(1280, 800)
+  })
+  await page.waitForFunction(() => innerWidth > 900)
+  await page.getByRole('button', { name: 'Split', exact: true }).click()
 
   await page
     .getByRole('textbox', { name: 'Markdown source' })
@@ -279,7 +387,9 @@ try {
   console.log(JSON.stringify({ passed: checks.length, errors, artifacts: root }, null, 2))
 } catch (error) {
   if (page) {
-    await page.screenshot({ path: resolve(root, 'failure.png') }).catch(() => undefined)
+    await page
+      .screenshot({ animations: 'disabled', path: resolve(root, 'failure.png') })
+      .catch(() => undefined)
   }
   console.error('Renderer errors:', errors)
   throw error
