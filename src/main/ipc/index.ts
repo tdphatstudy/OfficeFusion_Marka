@@ -60,7 +60,10 @@ export function registerIpcHandlers(): void {
           session = new Map()
           credentials.set(event.sender.id, session)
           const senderId = event.sender.id
-          event.sender.once('destroyed', () => credentials.delete(senderId))
+          event.sender.once('destroyed', () => {
+            session?.clear()
+            credentials.delete(senderId)
+          })
           event.sender.on('render-process-gone', () => session?.clear())
           event.sender.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
             if (isMainFrame) {

@@ -397,6 +397,25 @@ try {
   await page.screenshot({ path: resolve(root, 'connections-dark.png') })
   assert.deepEqual(errors, [])
   passed('Connection Hub screenshots captured in Light and Dark with no renderer errors')
+  await page.getByRole('button', { name: 'Close connections', exact: true }).click()
+  await app.evaluate(({ BrowserWindow }) => {
+    globalThis.fixtureKeepAlive = new BrowserWindow({ show: false })
+    globalThis.clearedCredentialEntries = 0
+    const clear = Map.prototype.clear
+    Map.prototype.clear = function () {
+      for (const entry of this.values()) {
+        if (entry?.value?.method === 'password' || entry?.value?.method === 'key') {
+          globalThis.clearedCredentialEntries++
+        }
+      }
+      return clear.call(this)
+    }
+  })
+  const closed = page.waitForEvent('close')
+  await page.evaluate(() => window.api.confirmClose())
+  await closed
+  assert.ok(await app.evaluate(() => globalThis.clearedCredentialEntries > 0))
+  passed('Closing the renderer clears cached credentials while the main process stays alive')
   console.log(JSON.stringify({ passed: checks.length, artifacts: root }, null, 2))
 } catch (error) {
   await page.screenshot({ path: resolve(root, 'failure.png') }).catch(() => undefined)

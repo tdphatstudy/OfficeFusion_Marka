@@ -81,7 +81,7 @@ Local/WSL/SSH/Network/URL, profiles/recent documents, remote Save, recovery và 
 
 - Regression suite: **47/47 pass**, gồm validation endpoint/port/path, shell quoting, giới hạn
   UTF-8, URL redirect/cancel, remote snapshot, Save As và reconnect giữ dirty state.
-- Connection smoke: **18/18 pass** trên Electron với HTTP/SSH localhost và WSL Ubuntu. Test tự sinh
+- Connection smoke: **19/19 pass** trên Electron với HTTP/SSH localhost và WSL Ubuntu. Test tự sinh
   host key, client key thường/key mã hóa, mật khẩu và passphrase giả. Không đọc key/agent cá nhân
   hoặc SSH tới host thật. File remote, upload và conflict được mock phía server.
 - Xác nhận sai fingerprint chặn trước authentication; sai password/passphrase báo lỗi; custom port,
@@ -99,6 +99,9 @@ Review cuối không phát hiện lỗi chặn phát hành trong phạm vi thay 
 trong profiles/recovery, main process xóa phiên khi reload/crash/close hoặc hết hạn. Fixture keys và
 test profiles được Git ignore và loại khỏi danh sách đóng gói. Có thể rollback bằng revert commit;
 profile mới là dữ liệu cục bộ, không có migration server hay thay đổi hệ thống SSH của người dùng.
+
+Test cuối giữ main process chạy sau khi đóng cửa sổ và xác nhận credential cache được clear ngay, kể
+cả khi timer hết hạn vẫn còn tồn tại. Lỗi giữ tham chiếu qua timer đã được sửa và kiểm tra lại.
 
 Giới hạn: SSH hiện kết nối trực tiếp, chưa hỗ trợ SSH config/ProxyJump, keyboard-interactive/MFA
 hoặc hardware keys. Remote Save cần Linux GNU coreutils và file thường có sẵn, không ghi symlink.
