@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useUIStore } from '@/stores/uiStore'
 
 interface ThemeHook {
@@ -9,22 +9,26 @@ interface ThemeHook {
 export function useTheme(): ThemeHook {
   const theme = useUIStore(state => state.theme)
   const setTheme = useUIStore(state => state.setTheme)
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches
+  )
 
   useEffect(() => {
-    const root = document.documentElement
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-
-    const applyTheme = (): void => {
-      const isDark = theme === 'dark' || (theme === 'system' && mediaQuery.matches)
-      root.classList.toggle('dark', isDark)
-    }
-
-    applyTheme()
-    mediaQuery.addEventListener('change', applyTheme)
+    const sync = (): void => setSystemDark(mediaQuery.matches)
+    sync()
+    mediaQuery.addEventListener('change', sync)
     return (): void => {
-      mediaQuery.removeEventListener('change', applyTheme)
+      mediaQuery.removeEventListener('change', sync)
     }
-  }, [theme])
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      'dark',
+      theme === 'dark' || (theme === 'system' && systemDark)
+    )
+  }, [theme, systemDark])
 
   return { theme, setTheme }
 }

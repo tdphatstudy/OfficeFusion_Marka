@@ -3,24 +3,26 @@ import { persist } from 'zustand/middleware'
 import { readDraft } from '@/lib/draft'
 import { preferenceStorage } from '@/lib/preferenceStorage'
 import type { EditorConfig, ViewMode } from '@/types/editor'
+import type { FileLocation } from '../../shared/connections'
 
 interface EditorState {
   content: string
   savedContent: string
   documentId: number
   filePath: string | null
+  fileLocation: FileLocation | null
   fileName: string
   isDirty: boolean
   recovered: boolean
   viewMode: ViewMode
   config: EditorConfig
   setContent: (content: string) => void
-  openFile: (path: string, content: string) => void
+  openFile: (path: string, content: string, location?: FileLocation) => void
   markSaved: (path: string, content: string, documentId: number) => void
   setViewMode: (mode: ViewMode) => void
   toggleFullWidth: () => void
   updateConfig: (patch: Partial<EditorConfig>) => void
-  newFile: (content?: string) => void
+  newFile: (content?: string, name?: string) => void
   dismissRecovery: () => void
 }
 
@@ -35,6 +37,8 @@ export const useEditorStore = create<EditorState>()(
       savedContent: draft?.savedContent ?? welcome,
       documentId: 0,
       filePath: draft?.filePath ?? null,
+      fileLocation:
+        draft?.location ?? (draft?.filePath ? { kind: 'local', path: draft.filePath } : null),
       fileName: draft?.filePath?.split(/[\\/]/).pop() ?? 'Untitled.md',
       isDirty: draft !== null,
       recovered: draft !== null,
@@ -50,10 +54,11 @@ export const useEditorStore = create<EditorState>()(
         fullWidth: false
       },
       setContent: content => set(state => ({ content, isDirty: content !== state.savedContent })),
-      openFile: (path, content) =>
+      openFile: (path, content, location) =>
         set(state => ({
           documentId: state.documentId + 1,
           filePath: path,
+          fileLocation: location ?? { kind: 'local', path },
           fileName: path.split(/[\\/]/).pop() ?? 'Untitled.md',
           content,
           savedContent: content,
@@ -67,6 +72,10 @@ export const useEditorStore = create<EditorState>()(
           }
           return {
             filePath: path,
+            fileLocation:
+              state.fileLocation?.kind === 'ssh' && path === state.filePath
+                ? state.fileLocation
+                : { kind: 'local', path },
             fileName: path.split(/[\\/]/).pop() ?? 'Untitled.md',
             savedContent: content,
             isDirty: state.content !== content,
@@ -77,13 +86,14 @@ export const useEditorStore = create<EditorState>()(
       toggleFullWidth: () =>
         set(state => ({ config: { ...state.config, fullWidth: !state.config.fullWidth } })),
       updateConfig: patch => set(state => ({ config: { ...state.config, ...patch } })),
-      newFile: (content = '') =>
+      newFile: (content = '', name = 'Untitled.md') =>
         set(state => ({
           documentId: state.documentId + 1,
           content,
           savedContent: '',
           filePath: null,
-          fileName: 'Untitled.md',
+          fileLocation: null,
+          fileName: name,
           isDirty: content !== '',
           recovered: false
         })),

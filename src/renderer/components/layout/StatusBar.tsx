@@ -8,6 +8,7 @@ import { changeViewMode } from '@/lib/commands'
 const StatusBar: FC = () => {
   const content = useEditorStore(state => state.content)
   const filePath = useEditorStore(state => state.filePath)
+  const location = useEditorStore(state => state.fileLocation)
   const isDirty = useEditorStore(state => state.isDirty)
   const viewMode = useEditorStore(state => state.viewMode)
   const fileBusy = useUIStore(state => state.fileBusy)
@@ -38,6 +39,16 @@ const StatusBar: FC = () => {
       <span>{readingTime} min read</span>
 
       <span className="flex-1" />
+      {location?.kind === 'ssh' && (
+        <button
+          type="button"
+          onClick={() => useUIStore.getState().setConnectionsOpen(true)}
+          className="font-medium text-accent"
+          title="Open connection hub"
+        >
+          SSH · {location.host}
+        </button>
+      )}
 
       {filePath ? (
         <span className="max-w-xs truncate opacity-60" title={filePath}>

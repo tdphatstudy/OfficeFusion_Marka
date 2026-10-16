@@ -9,6 +9,7 @@ import { richModeLimitation } from '@/lib/commands'
 import { CommandPalette } from '@/components/layout/CommandPalette'
 import { SettingsDialog } from '@/components/layout/SettingsDialog'
 import { Notifications } from '@/components/layout/Notifications'
+import { ConnectionHub } from '@/components/layout/ConnectionHub'
 
 const RichEditor = lazy(() =>
   import('@/components/editor/RichEditor').then(module => ({ default: module.RichEditor }))
@@ -166,6 +167,7 @@ const App: FC = () => {
         <StatusBar />
         <CommandPalette />
         <SettingsDialog />
+        <ConnectionHub />
         <Notifications />
       </div>
     </TooltipProvider>

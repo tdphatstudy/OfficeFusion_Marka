@@ -1,6 +1,28 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type {
+  ConnectedDocument,
+  ConnectionCapabilities,
+  ConnectionTarget,
+  SshCredentials,
+  FileLocation
+} from '../shared/connections'
 
 const api = {
+  connectionCapabilities: (): Promise<ConnectionCapabilities> =>
+    ipcRenderer.invoke('connection:capabilities'),
+  openConnectedDocument: (
+    target: ConnectionTarget,
+    credentials?: SshCredentials
+  ): Promise<ConnectedDocument> => ipcRenderer.invoke('connection:open', target, credentials),
+  saveConnectedDocument: (
+    target: FileLocation,
+    content: string,
+    expectedContent: string
+  ): Promise<string> => ipcRenderer.invoke('connection:save', target, content, expectedContent),
+  cancelConnection: (): void => {
+    ipcRenderer.send('connection:cancel')
+  },
+  chooseConnectionKey: (): Promise<string | null> => ipcRenderer.invoke('connection:chooseKey'),
   openFile: (): Promise<{ path: string; content: string } | null> =>
     ipcRenderer.invoke('dialog:openFile'),
   saveFile: (content: string, filePath?: string): Promise<string | null> =>

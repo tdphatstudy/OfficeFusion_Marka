@@ -73,3 +73,37 @@ dialogs được tự động hóa. Các luồng đã chạy:
   pháp HTML tùy biến. Plain-text export vẫn là chuyển đổi đơn giản.
 
 Không còn lỗi chặn phát hành được phát hiện trong phạm vi thay đổi và các luồng đã kiểm chứng.
+
+## Đợt 2 — Logo, Light mode và Connection Hub (16/10/2026)
+
+Phạm vi: logo SVG và bộ icon desktop, nút đổi theme nhanh, đồng bộ System theme, kết nối
+Local/WSL/SSH/Network/URL, profiles/recent documents, remote Save, recovery và reconnect giữ edit.
+
+- Regression suite: **47/47 pass**, gồm validation endpoint/port/path, shell quoting, giới hạn
+  UTF-8, URL redirect/cancel, remote snapshot, Save As và reconnect giữ dirty state.
+- Connection smoke: **18/18 pass** trên Electron với HTTP/SSH localhost và WSL Ubuntu. Test tự sinh
+  host key, client key thường/key mã hóa, mật khẩu và passphrase giả. Không đọc key/agent cá nhân
+  hoặc SSH tới host thật. File remote, upload và conflict được mock phía server.
+- Xác nhận sai fingerprint chặn trước authentication; sai password/passphrase báo lỗi; custom port,
+  key được chọn tường minh, cancel, output quá lớn và disconnect đều được bao phủ.
+- Xác nhận profile không chứa mật khẩu, passphrase hoặc key path; reload xóa credential trong main,
+  recovery giữ bản nháp, reconnect xác thực lại và Save tiếp được.
+- Lint, TypeScript main/preload và renderer: pass. Production build: pass, không có cảnh báo chunk
+  lớn trên renderer. SSH chạy trong main bằng dependency `ssh2`, không tăng bundle renderer.
+- Đã xem ảnh Connection Hub ở Light/Dark; sửa nhãn accessibility của select, thông báo lỗi bị lặp,
+  lỗi encoding placeholder và nút đổi theme bị lệch khi System appearance đổi.
+- Editor smoke trên build cuối: **20/20 pass**, không có renderer errors. Source 10.000 dòng mở
+  khoảng **145 ms** trong lượt này. WSL test chỉ mở/ghi file do test tạo trong `/tmp`, rồi xóa file.
+
+Review cuối không phát hiện lỗi chặn phát hành trong phạm vi thay đổi. SSH credentials không nằm
+trong profiles/recovery, main process xóa phiên khi reload/crash/close hoặc hết hạn. Fixture keys và
+test profiles được Git ignore và loại khỏi danh sách đóng gói. Có thể rollback bằng revert commit;
+profile mới là dữ liệu cục bộ, không có migration server hay thay đổi hệ thống SSH của người dùng.
+
+Giới hạn: SSH hiện kết nối trực tiếp, chưa hỗ trợ SSH config/ProxyJump, keyboard-interactive/MFA
+hoặc hardware keys. Remote Save cần Linux GNU coreutils và file thường có sẵn, không ghi symlink.
+Hai lần kiểm tra hash và staged rename giảm rủi ro ghi đè, nhưng không phải transaction lock;
+disconnect sau commit có thể khiến kết quả lưu không chắc chắn. Local/WSL/network vẫn dùng luồng ghi
+local hiện tại, chưa có conflict detection/atomic replacement. Chưa kiểm thử installer và native UI
+macOS/Linux; không có benchmark startup/memory toàn app. Chi tiết ở
+[CONNECTIONS.md](./CONNECTIONS.md).

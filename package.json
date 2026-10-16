@@ -12,6 +12,7 @@
   "scripts": {
     "test": "node scripts/test.mjs",
     "test:smoke": "node scripts/smoke-electron.mjs",
+    "test:connections": "node scripts/smoke-connections.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -99,7 +100,8 @@
     "tippy.js": "^6.3.7",
     "tiptap-markdown": "^0.9.0",
     "unified": "^11.0.5",
-    "zustand": "^5.0.2"
+    "zustand": "^5.0.2",
+    "ssh2": "^1.17.0"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.18.4",
@@ -122,6 +124,7 @@
     "@types/node": "^22.10.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@types/ssh2": "^1.15.6",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "commitizen": "^4.3.2",
@@ -154,6 +157,7 @@
       "buildResources": "resources"
     },
     "files": [
+      "!{tmp,temp,tests,scripts,docs}/**",
       "!**/.{idea,git,cache,output,temp}",
       "!{.editorconfig,.eslintrc.cjs,.eslintignore,.prettierrc,*.md}",
       "!{.env,.env.*,*.local,electron-builder.env}"

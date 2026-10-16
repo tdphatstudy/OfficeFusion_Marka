@@ -27,7 +27,22 @@ const { fileActions } = await import('@/lib/fileActions')
 const { richModeLimitation } = await import('@/lib/commands')
 
 let closed = false
-const api: Pick<ElectronAPI, 'saveFile' | 'openFile' | 'confirmUnsavedChanges' | 'confirmClose'> = {
+const api: Pick<
+  ElectronAPI,
+  | 'saveFile'
+  | 'openFile'
+  | 'confirmUnsavedChanges'
+  | 'confirmClose'
+  | 'saveConnectedDocument'
+  | 'openConnectedDocument'
+> = {
+  saveConnectedDocument: async () => 'ssh://dev/home/me/notes.md',
+  openConnectedDocument: async () => ({
+    content: '# Remote',
+    path: 'ssh://dev/home/me/notes.md',
+    location: { kind: 'ssh', host: 'dev', path: '/home/me/notes.md' },
+    name: 'notes.md'
+  }),
   saveFile: async () => '/notes.md',
   openFile: async () => ({ path: '/opened.md', content: '# Opened' }),
   confirmUnsavedChanges: async () => 'cancel',
@@ -45,6 +60,13 @@ beforeEach(() => {
   api.saveFile = async () => '/notes.md'
   api.openFile = async () => ({ path: '/opened.md', content: '# Opened' })
   api.confirmUnsavedChanges = async () => 'cancel'
+  api.saveConnectedDocument = async () => 'ssh://dev/home/me/notes.md'
+  api.openConnectedDocument = async () => ({
+    content: '# Remote',
+    path: 'ssh://dev/home/me/notes.md',
+    location: { kind: 'ssh', host: 'dev', path: '/home/me/notes.md' },
+    name: 'notes.md'
+  })
 })
 
 test('undo back to saved content clears dirty status', () => {
@@ -296,4 +318,141 @@ test('preview handles a 50 KB document within the regression budget', () => {
   const elapsed = performance.now() - start
   assert.match(html, /<strong>bold<\/strong>/)
   assert.ok(elapsed < 2500, `Preview took ${elapsed.toFixed(0)}ms`)
+})
+
+test('SSH Save writes back to the original endpoint with the saved snapshot', async () => {
+  const target = { kind: 'ssh' as const, host: 'dev', path: '/home/me/notes.md' }
+  useEditorStore.getState().openFile('ssh://dev/home/me/notes.md', 'Original', target)
+  useEditorStore.getState().setContent('Changed')
+  api.saveConnectedDocument = async (location, content, expected) => {
+    assert.deepEqual(location, target)
+    assert.equal(content, 'Changed')
+    assert.equal(expected, 'Original')
+    return 'ssh://dev/home/me/notes.md'
+  }
+  await fileActions.save()
+  assert.equal(useEditorStore.getState().isDirty, false)
+  assert.equal(useEditorStore.getState().fileLocation?.kind, 'ssh')
+})
+
+test('SSH Save As creates a local copy and switches subsequent saves to local', async () => {
+  const target = { kind: 'ssh' as const, host: 'dev', path: '/home/me/notes.md' }
+  useEditorStore.getState().openFile('ssh://dev/home/me/notes.md', 'Original', target)
+  await fileActions.saveAs()
+  assert.deepEqual(useEditorStore.getState().fileLocation, { kind: 'local', path: '/notes.md' })
+})
+
+test('SSH reconnect preserves dirty edits and their original saved snapshot', async () => {
+  const target = { kind: 'ssh' as const, host: 'dev', path: '/home/me/notes.md' }
+  const path = 'ssh://dev/home/me/notes.md'
+  useEditorStore.getState().openFile(path, 'Original', target)
+  useEditorStore.getState().setContent('Keep my draft')
+  api.openConnectedDocument = async () => ({
+    content: 'External changes',
+    path,
+    location: target,
+    name: 'notes.md'
+  })
+  assert.equal(
+    await fileActions.reconnectTarget(target, { method: 'password', password: 'mock-password' }),
+    true
+  )
+  assert.equal(useEditorStore.getState().content, 'Keep my draft')
+  assert.equal(useEditorStore.getState().savedContent, 'Original')
+  assert.equal(useEditorStore.getState().isDirty, true)
+})
+
+test('reconnect rejects a different destination without replacing the active draft', async () => {
+  useEditorStore.getState().setContent('Keep my draft')
+  api.openConnectedDocument = async () => ({
+    content: 'Other',
+    path: 'ssh://other/notes.md',
+    location: { kind: 'ssh', host: 'other', path: '/notes.md' },
+    name: 'notes.md'
+  })
+  assert.equal(
+    await fileActions.reconnectTarget({ kind: 'ssh', host: 'other', path: '/notes.md' }),
+    false
+  )
+  assert.equal(useEditorStore.getState().content, 'Keep my draft')
+})
+
+test('failed SSH writes keep edits and their original endpoint', async () => {
+  const target = { kind: 'ssh' as const, host: 'dev', path: '/home/me/notes.md' }
+  useEditorStore.getState().openFile('ssh://dev/home/me/notes.md', 'Original', target)
+  useEditorStore.getState().setContent('Changed')
+  api.saveConnectedDocument = async () => {
+    throw new Error('File changed on the server')
+  }
+  await fileActions.save()
+  assert.equal(useEditorStore.getState().isDirty, true)
+  assert.equal(useEditorStore.getState().fileLocation?.kind, 'ssh')
+  assert.match(useUIStore.getState().notice?.message ?? '', /changed on the server/)
+})
+
+test('opening an SSH document respects the unsaved guard', async () => {
+  useEditorStore.getState().setContent('Keep this local draft')
+  assert.equal(
+    await fileActions.openTarget({ kind: 'ssh', host: 'dev', path: '/home/me/notes.md' }),
+    false
+  )
+  assert.equal(useEditorStore.getState().content, 'Keep this local draft')
+  api.confirmUnsavedChanges = async () => 'discard'
+  assert.equal(
+    await fileActions.openTarget({ kind: 'ssh', host: 'dev', path: '/home/me/notes.md' }),
+    true
+  )
+  assert.equal(useEditorStore.getState().fileLocation?.kind, 'ssh')
+})
+
+test('URL imports become dirty local drafts rather than remote save targets', async () => {
+  api.openConnectedDocument = async () => ({
+    content: '# Imported',
+    location: null,
+    path: null,
+    name: 'notes.md'
+  })
+  await fileActions.openTarget({ kind: 'url', url: 'https://example.com/notes.md' })
+  assert.equal(useEditorStore.getState().fileLocation, null)
+  assert.equal(useEditorStore.getState().fileName, 'notes.md')
+  assert.equal(useEditorStore.getState().isDirty, true)
+})
+
+test('recovery preserves remote destinations and refuses untyped SSH paths', () => {
+  const target = { kind: 'ssh', host: 'dev', path: '/home/me/notes.md' }
+  storage.setItem(
+    draftKey,
+    JSON.stringify({
+      content: 'Changed',
+      savedContent: 'Original',
+      filePath: 'ssh://dev/home/me/notes.md',
+      location: target
+    })
+  )
+  assert.deepEqual(readDraft()?.location, target)
+  storage.setItem(
+    draftKey,
+    JSON.stringify({
+      content: 'Changed',
+      savedContent: 'Original',
+      filePath: 'ssh://dev/home/me/notes.md'
+    })
+  )
+  assert.equal(readDraft(), null)
+})
+
+test('recent documents deduplicate and query-bearing URL credentials are not persisted', async () => {
+  const { useConnectionStore } = await import('@/stores/connectionStore')
+  useConnectionStore.getState().clearRecent()
+  useConnectionStore.getState().remember({ kind: 'local', path: '/notes.md' })
+  useConnectionStore.getState().remember({ kind: 'local', path: '/notes.md' })
+  useConnectionStore
+    .getState()
+    .remember({ kind: 'url', url: 'https://example.com/file?token=secret' })
+  assert.equal(useConnectionStore.getState().recent.length, 1)
+  assert.throws(() =>
+    useConnectionStore
+      .getState()
+      .saveProfile('Private URL', { kind: 'url', url: 'https://example.com/file?token=secret' })
+  )
 })

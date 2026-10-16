@@ -49,6 +49,13 @@ export interface AppCommand {
 
 export const appCommands: AppCommand[] = [
   {
+    id: 'connections',
+    label: 'Open connections: WSL, SSH, network or URL',
+    group: 'File',
+    shortcut: 'Mod Shift C',
+    run: () => useUIStore.getState().setConnectionsOpen(true)
+  },
+  {
     id: 'new',
     label: 'New document',
     group: 'File',

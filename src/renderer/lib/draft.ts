@@ -1,7 +1,10 @@
+import { parseTarget, type FileLocation } from '../../shared/connections'
+
 export interface Draft {
   content: string
   savedContent: string
   filePath: string | null
+  location?: FileLocation
 }
 
 export const draftKey = 'marka-draft-v1'
@@ -29,7 +32,21 @@ export function readDraft(): Draft | null {
     ) {
       return null
     }
-    return { content: value.content, savedContent: value.savedContent, filePath: value.filePath }
+    const draft: Draft = {
+      content: value.content,
+      savedContent: value.savedContent,
+      filePath: value.filePath
+    }
+    if ('location' in value && value.location !== null && value.location !== undefined) {
+      const location = parseTarget(value.location)
+      if (location.kind === 'url') {
+        return null
+      }
+      draft.location = location
+    } else if (value.filePath?.startsWith('ssh://')) {
+      return null
+    }
+    return draft
   } catch {
     return null
   }

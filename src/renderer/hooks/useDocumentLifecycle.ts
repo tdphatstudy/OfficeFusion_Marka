@@ -10,10 +10,13 @@ export function useDocumentLifecycle(): void {
     let storageFailed = false
     const flush = (): void => {
       clearTimeout(timer)
-      const { content, savedContent, filePath, isDirty } = useEditorStore.getState()
+      const { content, savedContent, filePath, fileLocation, isDirty } = useEditorStore.getState()
       try {
         if (isDirty) {
-          localStorage.setItem(draftKey, JSON.stringify({ content, savedContent, filePath }))
+          localStorage.setItem(
+            draftKey,
+            JSON.stringify({ content, savedContent, filePath, location: fileLocation })
+          )
         } else {
           localStorage.removeItem(draftKey)
         }
@@ -31,6 +34,7 @@ export function useDocumentLifecycle(): void {
       if (
         state.content === previous.content &&
         state.isDirty === previous.isDirty &&
+        state.fileLocation === previous.fileLocation &&
         state.documentId === previous.documentId
       ) {
         return

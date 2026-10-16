@@ -39,8 +39,13 @@ liệu.
 
 ## Roadmap đề xuất sau đợt này
 
-1. **Workspace và nhiều tài liệu:** mở folder, file tree, tabs, recent files, quick open, drag/drop.
-   Cần model document riêng cho từng tab, guard close từng tab và recovery theo workspace.
+Đợt 2 đã bổ sung logo SVG mới và icon desktop đồng bộ, nút Light/Dark trực tiếp, Connection Hub cho
+Local/WSL/SSH/Network/URL, recent documents và profile kết nối. SSH hỗ trợ đọc/ghi với host trust,
+password/key được chọn tường minh, passphrase, custom port, fingerprint pinning và optimistic
+conflict checks. Hướng dẫn và giới hạn ở [CONNECTIONS.md](./CONNECTIONS.md).
+
+1. **Workspace và nhiều tài liệu:** mở folder, file tree, tabs, quick open, drag/drop. Cần model
+   document riêng cho từng tab, guard close từng tab và recovery theo workspace.
 2. **Lưu trữ vững hơn:** atomic writes, phát hiện file đổi bên ngoài, diff/conflict resolution,
    autosave tùy chọn và lịch sử phiên bản. Không tự ghi đè thay đổi từ ứng dụng khác.
 3. **Rich editing hoàn chỉnh:** link/image dialogs có validation, quản lý asset local, thao tác

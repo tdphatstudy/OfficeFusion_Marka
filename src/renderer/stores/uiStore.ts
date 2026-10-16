@@ -9,6 +9,7 @@ interface UIState {
   sidebarOpen: boolean
   sidebarWidth: number
   commandOpen: boolean
+  connectionsOpen: boolean
   settingsOpen: boolean
   focusMode: boolean
   fileBusy: boolean
@@ -19,6 +20,7 @@ interface UIState {
   toggleSidebar: () => void
   setSidebarWidth: (width: number) => void
   setCommandOpen: (open: boolean) => void
+  setConnectionsOpen: (open: boolean) => void
   setSettingsOpen: (open: boolean) => void
   toggleFocusMode: () => void
   setFileBusy: (busy: boolean) => void
@@ -34,6 +36,7 @@ export const useUIStore = create<UIState>()(
       sidebarOpen: true,
       sidebarWidth: 240,
       commandOpen: false,
+      connectionsOpen: false,
       settingsOpen: false,
       focusMode: false,
       fileBusy: false,
@@ -44,6 +47,7 @@ export const useUIStore = create<UIState>()(
       toggleSidebar: () => set(state => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarWidth: width => set({ sidebarWidth: Math.max(200, Math.min(360, width)) }),
       setCommandOpen: commandOpen => set({ commandOpen }),
+      setConnectionsOpen: connectionsOpen => set({ connectionsOpen }),
       setSettingsOpen: settingsOpen => set({ settingsOpen }),
       toggleFocusMode: () => set(state => ({ focusMode: !state.focusMode })),
       setFileBusy: fileBusy => set({ fileBusy }),

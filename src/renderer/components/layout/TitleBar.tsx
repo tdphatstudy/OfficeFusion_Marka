@@ -14,7 +14,10 @@ import {
   Settings2,
   Focus,
   ChevronDown,
-  Maximize2
+  Maximize2,
+  Globe,
+  Sun,
+  Moon
 } from 'lucide-react'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -22,6 +25,7 @@ import { fileActions } from '@/lib/fileActions'
 import { changeViewMode } from '@/lib/commands'
 import { exportDocument } from '@/lib/exportDocument'
 import { cn } from '@/lib/utils'
+import { BrandMark } from './BrandMark'
 
 const TitleBar: FC = () => {
   const fileName = useEditorStore(state => state.fileName)
@@ -31,6 +35,10 @@ const TitleBar: FC = () => {
   const sidebarOpen = useUIStore(state => state.sidebarOpen)
   const focusMode = useUIStore(state => state.focusMode)
   const fileBusy = useUIStore(state => state.fileBusy)
+  const theme = useUIStore(state => state.theme)
+  const isDark =
+    theme === 'dark' ||
+    (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   const isMac = navigator.userAgent.includes('Mac')
   const ui = useUIStore.getState()
 
@@ -46,7 +54,8 @@ const TitleBar: FC = () => {
           className="no-drag flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold hover:bg-surface-overlay"
           aria-label="File menu"
         >
-          <span className="text-accent">Marka</span>
+          <BrandMark />
+          <span className="text-text-primary">Marka</span>
           <ChevronDown size={12} />
         </Menu.Trigger>
         <Menu.Portal>
@@ -68,6 +77,13 @@ const TitleBar: FC = () => {
               }}
             >
               Open file…<kbd>Ctrl O</kbd>
+            </Menu.Item>
+            <Menu.Item
+              className="menu-item"
+              disabled={fileBusy}
+              onSelect={() => ui.setConnectionsOpen(true)}
+            >
+              Open connection…<kbd>Ctrl Shift C</kbd>
             </Menu.Item>
             <Menu.Item
               disabled={fileBusy}
@@ -120,6 +136,16 @@ const TitleBar: FC = () => {
           type="button"
           className="icon-button"
           disabled={fileBusy}
+          onClick={() => ui.setConnectionsOpen(true)}
+          aria-label="Open connections"
+          title="Open WSL, SSH, network or URL"
+        >
+          <Globe size={17} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          disabled={fileBusy}
           onClick={() => {
             void fileActions.open()
           }}
@@ -149,6 +175,15 @@ const TitleBar: FC = () => {
         {fileName}
       </div>
       <div className="no-drag flex items-center gap-1">
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={isDark ? 'Switch to Light mode' : 'Switch to Dark mode'}
+          title={isDark ? 'Light mode' : 'Dark mode'}
+          onClick={() => ui.setTheme(isDark ? 'light' : 'dark')}
+        >
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         <div
           role="group"
           aria-label="Editor view"

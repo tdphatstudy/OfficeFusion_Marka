@@ -1,4 +1,24 @@
+import type {
+  ConnectedDocument,
+  ConnectionCapabilities,
+  ConnectionTarget,
+  SshCredentials,
+  FileLocation
+} from '../../shared/connections'
+
 export interface ElectronAPI {
+  connectionCapabilities: () => Promise<ConnectionCapabilities>
+  openConnectedDocument: (
+    target: ConnectionTarget,
+    credentials?: SshCredentials
+  ) => Promise<ConnectedDocument>
+  saveConnectedDocument: (
+    target: FileLocation,
+    content: string,
+    expectedContent: string
+  ) => Promise<string>
+  cancelConnection: () => void
+  chooseConnectionKey: () => Promise<string | null>
   openFile: () => Promise<{ path: string; content: string } | null>
   saveFile: (content: string, filePath?: string) => Promise<string | null>
   confirmUnsavedChanges: (fileName: string) => Promise<'save' | 'discard' | 'cancel'>

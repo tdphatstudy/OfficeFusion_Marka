@@ -15,12 +15,12 @@ export function useKeyboardShortcuts(): void {
       const ui = useUIStore.getState()
       if (key === 'k' && !event.shiftKey) {
         event.preventDefault()
-        if (!ui.settingsOpen) {
+        if (!ui.settingsOpen && !ui.connectionsOpen) {
           ui.setCommandOpen(!ui.commandOpen)
         }
         return
       }
-      if (ui.commandOpen || ui.settingsOpen) {
+      if (ui.commandOpen || ui.settingsOpen || ui.connectionsOpen) {
         return
       }
       const shortcut = `Mod ${event.shiftKey ? 'Shift ' : ''}${key === ',' || key === '\\' ? key : key.toUpperCase()}`

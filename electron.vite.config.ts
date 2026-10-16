@@ -11,6 +11,7 @@ const katexStyles = createRequire(dependencyRequire.resolve('rehype-katex')).res
 export default defineConfig({
   main: {
     build: {
+      rollupOptions: { external: ['ssh2'] },
       lib: {
         entry: resolve(__dirname, 'src/main/index.ts')
       }

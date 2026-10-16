@@ -4,14 +4,14 @@
 
 :root {
   --color-surface: 0 0% 100%;
-  --color-surface-raised: 0 0% 97%;
-  --color-surface-overlay: 0 0% 94%;
-  --color-accent: 220 90% 56%;
-  --color-accent-hover: 220 90% 48%;
-  --color-text-primary: 220 10% 10%;
-  --color-text-secondary: 220 8% 40%;
-  --color-text-muted: 220 6% 60%;
-  --color-border: 220 10% 88%;
+  --color-surface-raised: 225 35% 97%;
+  --color-surface-overlay: 225 30% 93%;
+  --color-accent: 237 77% 57%;
+  --color-accent-hover: 237 72% 48%;
+  --color-text-primary: 225 30% 14%;
+  --color-text-secondary: 225 13% 38%;
+  --color-text-muted: 225 10% 46%;
+  --color-border: 225 23% 87%;
 }
 
 .dark {
@@ -22,7 +22,7 @@
   --color-accent-hover: 220 90% 72%;
   --color-text-primary: 220 10% 94%;
   --color-text-secondary: 220 8% 65%;
-  --color-text-muted: 220 6% 45%;
+  --color-text-muted: 220 8% 56%;
   --color-border: 220 13% 22%;
 }
 
@@ -145,6 +145,23 @@ ul[data-type='taskList'] li > div {
 }
 
 @layer components {
+  .primary-action {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50;
+  }
+  .secondary-action {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-secondary hover:bg-surface-raised disabled:opacity-50;
+  }
+  .connection-field {
+    @apply flex min-w-0 flex-col gap-1.5 text-xs font-medium text-text-secondary;
+  }
+  .connection-input,
+  .connection-field input,
+  .connection-field select {
+    @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs font-normal text-text-primary placeholder:text-text-muted;
+  }
+  .connection-help {
+    @apply text-[11px] leading-relaxed text-text-secondary;
+  }
   .icon-button {
     @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-overlay hover:text-accent disabled:opacity-40;
   }
