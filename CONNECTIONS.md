@@ -12,17 +12,19 @@ protection.
 | Network / Path | A UNC path such as `\\server\share\notes.md`, a mapped drive, or a mounted path             | Uses your operating system's filesystem and network authentication |
 | From URL       | An HTTP(S) raw Markdown/plain-text URL                                                      | Imports a copy; Save always chooses a local file                   |
 
-Connection opens accept UTF-8 text up to 5 MB and reject binary data. Missing files, permission
-errors and connection failures leave the active document intact. Requests have a 30-second deadline;
-URL downloads also have a 15-second deadline. **Cancel request** releases the UI without replacing
-the active document. A pending operating-system filesystem call can finish later; its result is
-ignored.
+SSH/URL imports accept UTF-8 text up to 5 MiB and reject binary data. Local, WSL and mounted files
+above 5 MiB open in the read-only range viewer (up to 10 GiB); each request reads at most 64 KiB.
+Typed local paths require native confirmation before file access. Missing files, permission errors
+and connection failures leave the active document intact. Requests have a 30-second deadline; URL
+downloads also have a 15-second deadline. **Cancel request** releases the UI without replacing the
+active document. A pending operating-system filesystem call can finish later; its result is ignored.
 
 ## SSH requirements
 
-- Choose **Password** or **SSH key**. For key authentication, explicitly select a private key and
-  enter its passphrase if encrypted. Marka never discovers default keys, uses an SSH agent, reads
-  your SSH config, or launches ProxyCommand/ProxyJump. Direct host connections only.
+- Choose **Password** or **SSH key**. For key authentication, select a private key through the
+  native Browse picker and enter its passphrase if encrypted. Marka never discovers default keys,
+  uses an SSH agent, reads your SSH config, or launches ProxyCommand/ProxyJump. Direct host
+  connections only.
 - Enter the server's **SHA256 host fingerprint**, verified independently with its administrator. A
   mismatch is rejected before credentials are sent. Marka does not silently accept host keys or edit
   `known_hosts`. To rotate a server key, verify the new fingerprint independently and update the
@@ -45,7 +47,9 @@ or save a local copy before resolving it.
 
 Remote writes require an existing regular file and reject symlinks. Replacement changes the file's
 inode; preservation of metadata beyond mode/ownership is not guaranteed. Native local/WSL/network
-writes currently use the existing local save flow and do not perform the SSH conflict check.
+writes now check the opened revision, stage and fsync bytes, preserve supported access controls,
+then recheck before rename. See [RELIABILITY.md](./RELIABILITY.md) for platform guarantees and
+remaining races.
 
 ## WSL and network paths
 

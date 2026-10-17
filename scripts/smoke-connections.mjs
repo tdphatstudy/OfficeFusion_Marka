@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { waitForDraft } from './smoke-helpers.mjs'
 import { build } from 'vite'
 import { _electron as electron } from 'playwright'
 import ssh2 from 'ssh2'
@@ -31,7 +32,7 @@ const { quoteRemotePath, sshSaveCommand } = await import(
 const harness = resolve(root, 'main.mjs')
 await writeFile(
   harness,
-  `import { app } from 'electron'; app.setPath('userData', ${JSON.stringify(profile)}); await import(${JSON.stringify(pathToFileURL(resolve('out/main/index.js')).href)});`
+  `import { app } from 'electron'; globalThis.mainErrors=[]; process.on('uncaughtException',error=>globalThis.mainErrors.push(error.message)); process.on('unhandledRejection',error=>globalThis.mainErrors.push(String(error))); app.setPath('userData', ${JSON.stringify(profile)}); await import(${JSON.stringify(pathToFileURL(resolve('out/main/index.js')).href)});`
 )
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
@@ -324,7 +325,10 @@ try {
   await page.getByRole('button', { name: 'Local SSH fixture', exact: true }).click()
   assert.equal(await page.getByLabel('Password', { exact: true }).inputValue(), '')
   await page.getByLabel('Authentication', { exact: true }).selectOption('key')
-  await page.getByLabel('Identity file', { exact: true }).fill(encryptedFile)
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
+  }, encryptedFile)
+  await page.getByRole('button', { name: 'Browse', exact: true }).click()
   await page.getByLabel('Key passphrase (optional)', { exact: true }).fill('wrong-passphrase')
   await page.getByRole('button', { name: 'Open document', exact: true }).click()
   await page.getByRole('dialog').getByRole('alert').waitFor()
@@ -332,6 +336,10 @@ try {
   await page.getByRole('button', { name: 'Open document', exact: true }).click()
   await waitContent('# Changed outside Marka')
   passed('Explicit encrypted fixture key supports passphrase and rejects a wrong passphrase')
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
+  }, identityFile)
+  await page.evaluate(() => window.api.chooseConnectionKey())
   const plainKey = await apiOpen(target, { method: 'key', keyPath: identityFile })
   assert.equal(plainKey.document.content, remoteContent)
   passed('Explicit unencrypted fixture key authenticates without a machine key or agent')
@@ -339,9 +347,7 @@ try {
   for (const secret of ['fixture-password', 'fixture-passphrase', 'fixture-key', 'PRIVATE KEY'])
     assert.ok(!stored.includes(secret))
   await source().fill('# Draft kept across reconnect')
-  await page.waitForFunction(() =>
-    localStorage.getItem('marka-draft-v1')?.includes('Draft kept across reconnect')
-  )
+  await waitForDraft(page, 'Draft kept across reconnect')
   await page.reload()
   await source().waitFor()
   const expired = await page.evaluate(async target => {
@@ -396,6 +402,7 @@ try {
   await choose('SSH')
   await page.screenshot({ animations: 'disabled', path: resolve(root, 'connections-dark.png') })
   assert.deepEqual(errors, [])
+  assert.deepEqual(await app.evaluate(() => globalThis.mainErrors), [])
   passed('Connection Hub screenshots captured in Light and Dark with no renderer errors')
   await page.getByRole('button', { name: 'Close connections', exact: true }).click()
   await app.evaluate(({ BrowserWindow }) => {
@@ -415,6 +422,7 @@ try {
   await page.evaluate(() => window.api.confirmClose())
   await closed
   assert.ok(await app.evaluate(() => globalThis.clearedCredentialEntries > 0))
+  assert.deepEqual(await app.evaluate(() => globalThis.mainErrors), [])
   passed('Closing the renderer clears cached credentials while the main process stays alive')
   console.log(JSON.stringify({ passed: checks.length, artifacts: root }, null, 2))
 } catch (error) {
@@ -422,9 +430,21 @@ try {
     .screenshot({ animations: 'disabled', path: resolve(root, 'failure.png') })
     .catch(() => undefined)
   console.error('Renderer errors:', errors)
+  console.error(
+    'Visible failure:',
+    await page
+      .locator('body')
+      .innerText()
+      .catch(() => 'closed')
+  )
   throw error
 } finally {
-  await app.evaluate(({ app }) => app.exit(0)).catch(() => undefined)
+  await app
+    .evaluate(({ app }) => {
+      setTimeout(() => app.exit(0), 0)
+    })
+    .catch(() => undefined)
+  await app.close().catch(() => undefined)
   for (const client of clients) {
     client.end()
   }

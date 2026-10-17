@@ -2,11 +2,16 @@ import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import type { ConnectionTarget, SshCredentials } from '../../shared/connections'
+import { flushEditor } from './editorSession'
+import { flushRecovery } from './recovery'
 
 let operation: Promise<void> | null = null
 
 async function saveDocument(saveAs = false): Promise<boolean> {
   const snapshot = useEditorStore.getState()
+  if (snapshot.pagedDocument) {
+    throw new Error('Large files are read-only. Save is unavailable.')
+  }
   const remote = !saveAs && snapshot.fileLocation?.kind === 'ssh'
   const path =
     remote && snapshot.fileLocation
@@ -17,11 +22,13 @@ async function saveDocument(saveAs = false): Promise<boolean> {
         )
       : await window.api.saveFile(
           snapshot.content,
-          saveAs ? undefined : (snapshot.filePath ?? undefined)
+          saveAs ? undefined : (snapshot.filePath ?? undefined),
+          snapshot.savedContent
         )
   if (!path) {
     return false
   }
+  flushEditor()
   useEditorStore.getState().markSaved(path, snapshot.content, snapshot.documentId)
   const location = useEditorStore.getState().fileLocation
   if (location) {
@@ -32,6 +39,7 @@ async function saveDocument(saveAs = false): Promise<boolean> {
 }
 
 async function confirmReplacement(): Promise<boolean> {
+  flushEditor()
   if (!useEditorStore.getState().isDirty) {
     return true
   }
@@ -46,6 +54,7 @@ function runOperation(action: () => Promise<void>): Promise<void> {
   if (operation) {
     return operation
   }
+  flushEditor()
   useUIStore.getState().setFileBusy(true)
   operation = action()
     .catch((error: unknown) => {
@@ -90,10 +99,17 @@ export const fileActions = {
   openTarget: async (target: ConnectionTarget, credentials?: SshCredentials): Promise<boolean> => {
     let opened = false
     await runOperation(async () => {
-      const result = await window.api.openConnectedDocument(target, credentials)
+      let result = await window.api.openConnectedDocument(target, credentials)
+      const baseline = useEditorStore.getState().savedContent
       if (await confirmReplacement()) {
+        const state = useEditorStore.getState()
+        if (baseline !== state.savedContent && !result.paged) {
+          result = await window.api.openConnectedDocument(target, credentials)
+        }
         if (result.location && result.path) {
-          useEditorStore.getState().openFile(result.path, result.content, result.location)
+          useEditorStore
+            .getState()
+            .openFile(result.path, result.content, result.location, result.paged)
         } else {
           useEditorStore.getState().newFile(result.content, result.name)
           useUIStore.getState().notify('Imported a copy. Save to choose a local location.')
@@ -106,9 +122,14 @@ export const fileActions = {
   },
   open: (): Promise<void> =>
     runOperation(async () => {
-      const result = await window.api.openFile()
+      let result = await window.api.openFile()
+      const baseline = useEditorStore.getState().savedContent
       if (result && (await confirmReplacement())) {
-        useEditorStore.getState().openFile(result.path, result.content)
+        const state = useEditorStore.getState()
+        if (baseline !== state.savedContent && !result.paged) {
+          result = await window.api.refreshFile(result.path)
+        }
+        useEditorStore.getState().openFile(result.path, result.content, undefined, result.paged)
         useConnectionStore.getState().remember({ kind: 'local', path: result.path })
       }
     }),
@@ -133,6 +154,7 @@ export const fileActions = {
         if (state.isDirty) {
           state.setContent(state.savedContent)
         }
+        await flushRecovery()
         window.api.confirmClose()
       }
     })

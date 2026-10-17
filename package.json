@@ -13,6 +13,8 @@
     "test": "node scripts/test.mjs",
     "test:smoke": "node scripts/smoke-electron.mjs",
     "test:connections": "node scripts/smoke-connections.mjs",
+    "test:security": "node scripts/smoke-security.mjs",
+    "test:package": "node scripts/smoke-package.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -96,12 +98,12 @@
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.1",
     "shiki": "^1.24.4",
+    "ssh2": "^1.17.0",
     "tailwind-merge": "^2.5.5",
     "tippy.js": "^6.3.7",
     "tiptap-markdown": "^0.9.0",
     "unified": "^11.0.5",
-    "zustand": "^5.0.2",
-    "ssh2": "^1.17.0"
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.18.4",
@@ -129,13 +131,15 @@
     "autoprefixer": "^10.4.20",
     "commitizen": "^4.3.2",
     "cz-conventional-changelog": "^3.3.0",
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "electron-builder-squirrel-windows": "26.15.3",
     "electron-vite": "^3.0.0",
     "eslint": "^9.17.0",
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.18",
+    "fake-indexeddb": "^6.2.6",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "playwright": "1.62.1",
@@ -157,10 +161,9 @@
       "buildResources": "resources"
     },
     "files": [
-      "!{tmp,temp,tests,scripts,docs}/**",
-      "!**/.{idea,git,cache,output,temp}",
-      "!{.editorconfig,.eslintrc.cjs,.eslintignore,.prettierrc,*.md}",
-      "!{.env,.env.*,*.local,electron-builder.env}"
+      "out/**/*",
+      "resources/icon.*",
+      "package.json"
     ],
     "win": {
       "target": [
@@ -189,6 +192,12 @@
       ],
       "icon": "resources/icon.png",
       "category": "Office"
+    }
+  },
+  "pnpm": {
+    "overrides": {
+      "katex": "0.19.0",
+      "ssh2>cpu-features": "-"
     }
   }
 }

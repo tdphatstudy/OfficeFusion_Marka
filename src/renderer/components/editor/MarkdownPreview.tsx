@@ -1,36 +1,74 @@
 import { useEffect, useRef, useState, type FC } from 'react'
 import { useEditorStore } from '@/stores/editorStore'
 import 'katex/dist/katex.min.css'
+import { createLatestTask } from '@/lib/latestTask'
+import { previewCharacters } from '../../../shared/documents'
+
+interface PreviewResult {
+  id: number
+  html: string
+  error: boolean
+}
 
 export const MarkdownPreview: FC = () => {
   const content = useEditorStore(state => state.content)
-  const [result, setResult] = useState({ id: 0, source: '', html: '', error: false })
-  const worker = useRef<Worker | null>(null)
+  const [result, setResult] = useState<PreviewResult>({ id: 0, html: '', error: false })
+  const queue = useRef<ReturnType<
+    typeof createLatestTask<{ id: number; content: string }, PreviewResult>
+  > | null>(null)
   const requestId = useRef(0)
   const preview = useRef<HTMLElement>(null)
   useEffect(() => {
-    const instance = new Worker(new URL('../../lib/previewWorker.ts', import.meta.url), {
-      type: 'module'
-    })
-    worker.current = instance
-    instance.onmessage = (
-      event: MessageEvent<{ id: number; source: string; html: string; error: boolean }>
-    ): void => {
-      if (event.data.id === requestId.current) {
-        setResult(event.data)
-      }
-    }
-    instance.onerror = (): void => {
-      setResult({ id: requestId.current, source: '', html: '', error: true })
-    }
+    let reusable: Worker | null = null
+    const instance = createLatestTask<{ id: number; content: string }, PreviewResult>(
+      (request, signal) =>
+        new Promise((resolve, reject) => {
+          if (request.content.length > previewCharacters) {
+            resolve({ id: request.id, html: '', error: true })
+            return
+          }
+          reusable ??= new Worker(new URL('../../lib/previewWorker.ts', import.meta.url), {
+            type: 'module'
+          })
+          const worker = reusable
+          const abort = (): void => {
+            worker.terminate()
+            reusable = null
+            reject(new Error('Preview cancelled.'))
+          }
+          signal.addEventListener('abort', abort, { once: true })
+          const cleanup = (): void => {
+            signal.removeEventListener('abort', abort)
+          }
+          worker.onmessage = (event: MessageEvent<PreviewResult>): void => {
+            cleanup()
+            resolve(event.data)
+          }
+          worker.onerror = (): void => {
+            cleanup()
+            worker.terminate()
+            reusable = null
+            reject(new Error('Preview failed.'))
+          }
+          worker.postMessage(request)
+        }),
+      value => {
+        if (value.id === requestId.current) {
+          setResult(value)
+        }
+      },
+      () => setResult({ id: requestId.current, html: '', error: true })
+    )
+    queue.current = instance
     return () => {
-      instance.terminate()
-      worker.current = null
+      instance.dispose()
+      reusable?.terminate()
+      queue.current = null
     }
   }, [])
   useEffect(() => {
     const id = ++requestId.current
-    const timer = setTimeout(() => worker.current?.postMessage({ id, content }), 120)
+    const timer = setTimeout(() => queue.current?.submit({ id, content }), 120)
     return () => {
       clearTimeout(timer)
     }
@@ -58,7 +96,7 @@ export const MarkdownPreview: FC = () => {
     }
   }, [])
 
-  let status = result.source === content && result.id > 0 ? 'Up to date' : 'Updating…'
+  let status = result.id === requestId.current && result.id > 0 ? 'Up to date' : 'Updating…'
   if (result.error) {
     status = 'Unavailable'
   }
@@ -75,7 +113,8 @@ export const MarkdownPreview: FC = () => {
       <div className="preview-scroll flex-1 overflow-auto p-6">
         {result.error ? (
           <p role="alert" className="text-sm text-text-secondary">
-            Preview could not render. Your source is safe; try editing the last block.
+            Preview is paused because this document exceeds a rendering budget or could not render.
+            Your source is safe; use Markdown mode or a smaller section.
           </p>
         ) : (
           <article

@@ -1,11 +1,12 @@
 import { createJSONStorage } from 'zustand/middleware'
+import { safePreferences } from './preferences'
 
 const lastValues = new Map<string, string>()
 
 export const preferenceStorage = createJSONStorage(() => ({
   getItem: (name: string): string | null => {
     try {
-      return localStorage.getItem(name)
+      return safePreferences(name, localStorage.getItem(name))
     } catch {
       return null
     }

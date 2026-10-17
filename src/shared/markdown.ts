@@ -1,0 +1,95 @@
+import { unified } from 'unified'
+import remarkParse from 'remark-parse'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import remarkFrontmatter from 'remark-frontmatter'
+import remarkRehype from 'remark-rehype'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize, { defaultSchema, type Options as SanitizeOptions } from 'rehype-sanitize'
+import rehypeKatex from 'rehype-katex'
+import rehypeHighlight from 'rehype-highlight'
+import rehypeStringify from 'rehype-stringify'
+import { exportCharacters, previewCharacters } from './documents'
+
+interface HtmlNode {
+  type: string
+  tagName?: string
+  properties?: Record<string, unknown>
+  position?: { start: { line: number } }
+  children?: HtmlNode[]
+}
+
+const previewSchema: SanitizeOptions = {
+  ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames ?? []), 'mark', 'u'],
+  attributes: {
+    ...defaultSchema.attributes,
+    div: [
+      ...(defaultSchema.attributes?.['div'] ?? []),
+      ['dataType', 'callout'],
+      ['dataCalloutType', 'info', 'warning', 'tip', 'danger']
+    ],
+    '*': [
+      ...(defaultSchema.attributes?.['*'] ?? []),
+      ['style', /^text-align:\s*(left|center|right|justify);?$/i]
+    ]
+  }
+}
+
+function headingPositions(): (tree: HtmlNode) => void {
+  return tree => {
+    let nodes = 0
+    const visit = (node: HtmlNode, depth = 0): void => {
+      if (++nodes > 20_000 || depth > 100) {
+        throw new Error('Document is too complex to preview. Use Markdown mode.')
+      }
+      if (node.tagName && /^h[1-6]$/.test(node.tagName) && node.position) {
+        node.properties = { ...node.properties, 'data-source-line': node.position.start.line }
+      }
+      node.children?.forEach(child => visit(child, depth + 1))
+    }
+    visit(tree)
+  }
+}
+
+function renderedTreeBudget(): (tree: HtmlNode) => void {
+  return headingPositions()
+}
+
+function createProcessor(output: 'htmlAndMathml' | 'mathml') {
+  return unified()
+    .use(remarkParse)
+    .use(remarkFrontmatter)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypeRaw)
+    .use(rehypeSanitize, previewSchema)
+    .use(headingPositions)
+    .use(rehypeKatex, { throwOnError: false, trust: false, maxSize: 20, maxExpand: 500, output })
+    .use(rehypeHighlight, { detect: false, ignoreMissing: true })
+    .use(renderedTreeBudget)
+    .use(rehypeStringify)
+}
+
+const processors = {
+  htmlAndMathml: createProcessor('htmlAndMathml'),
+  mathml: createProcessor('mathml')
+}
+
+export function renderMarkdown(
+  content: string,
+  mathOutput: 'htmlAndMathml' | 'mathml' = 'htmlAndMathml'
+): string {
+  const maximum = mathOutput === 'mathml' ? exportCharacters : previewCharacters
+  if (content.length > maximum || content.split('\n').some(line => line.length > 16_384)) {
+    throw new Error(
+      'Document exceeds the rendering budget. Use Markdown mode or export a smaller section.'
+    )
+  }
+  const output = String(processors[mathOutput].processSync(content))
+  if (output.length > 2 * 1024 * 1024) {
+    throw new Error('Rendered document exceeds the output budget.')
+  }
+  return output
+}

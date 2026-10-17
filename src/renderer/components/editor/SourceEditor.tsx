@@ -34,6 +34,8 @@ import { useEditorStore } from '@/stores/editorStore'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { useUIStore } from '@/stores/uiStore'
 import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
+import { registerEditorFlush } from '@/lib/editorSession'
+import { editBudget } from '@/lib/editBudget'
 
 export const SourceEditor: FC = () => {
   const host = useRef<HTMLDivElement>(null)
@@ -44,10 +46,23 @@ export const SourceEditor: FC = () => {
   const documentId = useEditorStore(state => state.documentId)
   const theme = useUIStore(state => state.theme)
   const findRequested = useUIStore(state => state.findRequested)
+  const published = useRef(content)
 
   useEffect(() => {
     if (!host.current) {
       return
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let pending = false
+    let lastPublish = Date.now()
+    const flush = (): void => {
+      clearTimeout(timer)
+      if (pending) {
+        pending = false
+        published.current = instance.state.doc.toString()
+        useEditorStore.getState().setContent(published.current)
+        lastPublish = Date.now()
+      }
     }
     const instance = new EditorView({
       parent: host.current,
@@ -55,6 +70,14 @@ export const SourceEditor: FC = () => {
         doc: useEditorStore.getState().content,
         extensions: [
           markdown(),
+          editBudget(() =>
+            useUIStore
+              .getState()
+              .notify(
+                'Edit rejected: documents must stay within 5 MiB of UTF-8 text. Split the content into smaller files.',
+                true
+              )
+          ),
           history(),
           drawSelection(),
           highlightActiveLine(),
@@ -68,13 +91,21 @@ export const SourceEditor: FC = () => {
           EditorView.updateListener.of(update => {
             publishEditorHistory(undoDepth(update.state) > 0, redoDepth(update.state) > 0)
             if (update.docChanged) {
-              useEditorStore.getState().setContent(update.state.doc.toString())
+              pending = true
+              useEditorStore.setState({ isDirty: true })
+              clearTimeout(timer)
+              timer = setTimeout(
+                flush,
+                Math.max(0, Math.min(150, 500 - (Date.now() - lastPublish)))
+              )
             }
           })
         ]
       })
     })
     view.current = instance
+    published.current = useEditorStore.getState().content
+    const unregisterFlush = registerEditorFlush(flush)
     publishEditorHistory(undoDepth(instance.state) > 0, redoDepth(instance.state) > 0)
     const unsubscribeHistory = subscribeEditorHistory(action => {
       if (action === 'undo') {
@@ -108,6 +139,8 @@ export const SourceEditor: FC = () => {
     }
     window.addEventListener('marka:navigate', navigate)
     return () => {
+      clearTimeout(timer)
+      unregisterFlush()
       window.removeEventListener('marka:navigate', navigate)
       unsubscribeHistory()
       instance.destroy()
@@ -125,7 +158,8 @@ export const SourceEditor: FC = () => {
 
   useEffect(() => {
     const instance = view.current
-    if (instance && instance.state.doc.toString() !== content) {
+    if (instance && published.current !== content) {
+      published.current = content
       instance.dispatch({ changes: { from: 0, to: instance.state.doc.length, insert: content } })
     }
   }, [content])

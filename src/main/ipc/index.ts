@@ -1,109 +1,238 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
-import { readFile, writeFile } from 'fs/promises'
+import { randomUUID } from 'node:crypto'
+import { isAbsolute } from 'node:path'
+import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import { parseTarget, targetLabel, type SshCredentials } from '../../shared/connections'
+import { checkedContent, exportCharacters } from '../../shared/documents'
 import {
   connectionCapabilities,
   openConnectedDocument,
   saveConnectedDocument
 } from '../connections'
+import { FileAccess } from '../files'
+import { renderExport } from '../export'
+import { assertSender, trustedSender } from './security'
+
+function checkedPath(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    !isAbsolute(value) ||
+    value.length > 4096 ||
+    /[\x00-\x1f]/.test(value)
+  ) {
+    throw new Error('Invalid file path.')
+  }
+  return value
+}
+
+function parseAuth(value: unknown): SshCredentials | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (value && typeof value === 'object' && 'method' in value) {
+    if (
+      value.method === 'password' &&
+      'password' in value &&
+      typeof value.password === 'string' &&
+      value.password.length <= 4096
+    ) {
+      return { method: 'password', password: value.password }
+    }
+    if (value.method === 'key' && 'keyPath' in value && typeof value.keyPath === 'string') {
+      const keyPath = checkedPath(value.keyPath)
+      const passphrase = 'passphrase' in value ? value.passphrase : undefined
+      if (
+        passphrase === undefined ||
+        (typeof passphrase === 'string' && passphrase.length <= 4096)
+      ) {
+        return { method: 'key', keyPath, passphrase }
+      }
+    }
+  }
+  throw new Error('Invalid SSH authentication.')
+}
 
 export function registerIpcHandlers(): void {
+  const files = new Map<number, FileAccess>()
   const credentials = new Map<number, Map<string, { value: SshCredentials; expires: number }>>()
-  const connectionKey = (target: unknown): string => {
+  const keyGrants = new Map<number, Set<string>>()
+  const connections = new Map<number, AbortController>()
+  const pending = new Map<number, number>()
+  const exports = new Set<number>()
+  const requests = new WeakMap<
+    Electron.IpcMainInvokeEvent,
+    { access: FileAccess; generation: number }
+  >()
+  const assertCurrent = (event: Electron.IpcMainInvokeEvent): void => {
+    assertSender(event)
+    const request = requests.get(event)
+    if (!request || request.access.generation !== request.generation) {
+      throw new Error('Window changed during the operation. Try again.')
+    }
+  }
+  const access = (event: Electron.IpcMainInvokeEvent): FileAccess => {
+    let value = files.get(event.sender.id)
+    if (!value) {
+      value = new FileAccess()
+      const owner = event.sender.id
+      files.set(owner, value)
+      const cleanup = (): void => {
+        void value?.dispose()
+        credentials.get(owner)?.clear()
+        keyGrants.delete(owner)
+        connections.get(owner)?.abort()
+      }
+      event.sender.once('destroyed', () => {
+        cleanup()
+        files.delete(owner)
+        credentials.delete(owner)
+      })
+      event.sender.on('render-process-gone', cleanup)
+      event.sender.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => {
+        if (mainFrame) {
+          cleanup()
+        }
+      })
+    }
+    return value
+  }
+  const handle = (
+    channel: string,
+    handler: (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown
+  ): void => {
+    ipcMain.handle(channel, async (event, ...args: unknown[]) => {
+      assertSender(event)
+      const fileAccess = access(event)
+      requests.set(event, { access: fileAccess, generation: fileAccess.generation })
+      const count = pending.get(event.sender.id) ?? 0
+      if (count >= 4) {
+        throw new Error('Too many file operations. Wait for the current operation.')
+      }
+      pending.set(event.sender.id, count + 1)
+      try {
+        const result = await handler(event, ...args)
+        assertCurrent(event)
+        return result
+      } finally {
+        pending.set(event.sender.id, Math.max(0, (pending.get(event.sender.id) ?? 1) - 1))
+      }
+    })
+  }
+  const key = (target: unknown): string => {
     const parsed = parseTarget(target)
     return `${targetLabel(parsed)}|${parsed.kind === 'ssh' ? parsed.fingerprint : ''}`
   }
-  const connections = new Map<number, AbortController>()
   const withConnection = async <T>(
     event: Electron.IpcMainInvokeEvent,
     action: (signal: AbortSignal) => Promise<T>
   ): Promise<T> => {
+    access(event)
     if (connections.has(event.sender.id)) {
       throw new Error('A connection operation is already running.')
     }
     const controller = new AbortController()
-    const senderId = event.sender.id
-    const abort = (): void => controller.abort(new Error('Connection cancelled.'))
-    const timer = setTimeout(
-      () => controller.abort(new Error('Connection timed out. Check the path, host and network.')),
-      30_000
-    )
-    const interrupted = new Promise<never>((_resolve, reject) => {
-      controller.signal.addEventListener('abort', () => reject(controller.signal.reason), {
-        once: true
-      })
-    })
-    connections.set(senderId, controller)
-    event.sender.once('destroyed', abort)
+    connections.set(event.sender.id, controller)
+    const timer = setTimeout(() => controller.abort(new Error('Connection timed out.')), 30_000)
     try {
-      return await Promise.race([action(controller.signal), interrupted])
-    } catch (error: unknown) {
-      if (controller.signal.aborted) {
-        throw controller.signal.reason
-      }
-      throw error
+      return await Promise.race([
+        action(controller.signal),
+        new Promise<never>((_resolve, reject) =>
+          controller.signal.addEventListener(
+            'abort',
+            () => reject(new Error('Connection cancelled.')),
+            { once: true }
+          )
+        )
+      ])
     } finally {
       clearTimeout(timer)
-      connections.delete(senderId)
-      if (!event.sender.isDestroyed()) {
-        event.sender.removeListener('destroyed', abort)
+      if (connections.get(event.sender.id) === controller) {
+        connections.delete(event.sender.id)
       }
     }
   }
-  ipcMain.handle('connection:capabilities', () => connectionCapabilities())
-  ipcMain.handle('connection:open', (event, target: unknown, auth: SshCredentials | undefined) =>
+  handle('connection:capabilities', () => connectionCapabilities())
+  handle('connection:open', (event, rawTarget, rawAuth) =>
     withConnection(event, async signal => {
+      const target = parseTarget(rawTarget)
+      const fileAccess = access(event)
+      if (target.kind === 'local') {
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (!window) {
+          throw new Error('Window closed.')
+        }
+        const permission = await dialog.showMessageBox(window, {
+          type: 'question',
+          title: 'Open file location',
+          message: 'Open this file?',
+          detail: checkedPath(target.path),
+          buttons: ['Cancel', 'Open'],
+          defaultId: 1,
+          cancelId: 0
+        })
+        if (permission.response !== 1) {
+          throw new Error('Connection cancelled.')
+        }
+        signal.throwIfAborted()
+        assertCurrent(event)
+        const result = await fileAccess.open(target.path)
+        return {
+          ...result,
+          location: target,
+          name: target.path.split(/[\\/]/).pop() ?? 'Document.md'
+        }
+      }
+      const auth = parseAuth(rawAuth)
+      if (auth?.method === 'key' && !keyGrants.get(event.sender.id)?.has(auth.keyPath)) {
+        throw new Error('Choose this private key through the file picker first.')
+      }
       const result = await openConnectedDocument(target, signal, auth)
+      signal.throwIfAborted()
       if (result.location?.kind === 'ssh' && auth) {
         let session = credentials.get(event.sender.id)
         if (!session) {
           session = new Map()
           credentials.set(event.sender.id, session)
-          const senderId = event.sender.id
-          event.sender.once('destroyed', () => {
-            session?.clear()
-            credentials.delete(senderId)
-          })
-          event.sender.on('render-process-gone', () => session?.clear())
-          event.sender.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
-            if (isMainFrame) {
-              session?.clear()
-            }
-          })
         }
         if (session.size >= 8) {
           session.clear()
         }
-        const key = connectionKey(result.location)
         const expires = Date.now() + 30 * 60_000
-        session.set(key, { value: auth, expires })
+        const destination = key(result.location)
+        session.set(destination, { value: auth, expires })
+        const ownerSession = session
         setTimeout(() => {
-          if (session?.get(key)?.expires === expires) {
-            session.delete(key)
+          if (ownerSession.get(destination)?.expires === expires) {
+            ownerSession.delete(destination)
           }
         }, 30 * 60_000).unref()
       }
       return result
     })
   )
-  ipcMain.handle('connection:save', (event, target: unknown, content: unknown, expected: unknown) =>
+  handle('connection:save', (event, target, content, expected) =>
     withConnection(event, signal => {
       const session = credentials.get(event.sender.id)
-      const key = connectionKey(target)
-      const auth = session?.get(key)
+      const auth = session?.get(key(target))
       if (!auth || auth.expires < Date.now()) {
-        session?.delete(key)
-        throw new Error(
-          'SSH session expired. Save As a local copy before reconnecting, or copy your edits and reopen the connection.'
-        )
+        session?.delete(key(target))
+        throw new Error('SSH session expired. Save As a local copy or reconnect before saving.')
       }
-      return saveConnectedDocument(target, content, expected, signal, auth.value)
+      return saveConnectedDocument(
+        target,
+        checkedContent(content),
+        checkedContent(expected),
+        signal,
+        auth.value
+      )
     })
   )
   ipcMain.on('connection:cancel', event => {
-    connections.get(event.sender.id)?.abort(new Error('Connection cancelled.'))
+    if (trustedSender(event)) {
+      connections.get(event.sender.id)?.abort()
+    }
   })
-  ipcMain.handle('connection:chooseKey', async event => {
+  handle('connection:chooseKey', async event => {
+    access(event)
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) {
       return null
@@ -112,12 +241,24 @@ export function registerIpcHandlers(): void {
       title: 'Choose SSH private key (explicit selection only)',
       properties: ['openFile']
     })
-    return result.canceled ? null : (result.filePaths[0] ?? null)
+    const path = result.filePaths[0]
+    if (result.canceled || !path) {
+      return null
+    }
+    assertCurrent(event)
+    const grants = keyGrants.get(event.sender.id) ?? new Set<string>()
+    grants.add(path)
+    keyGrants.set(event.sender.id, grants)
+    return path
   })
-  ipcMain.handle('dialog:confirmUnsavedChanges', async (event, fileName: string) => {
+  handle('dialog:confirmUnsavedChanges', async (event, value) => {
+    const fileName = typeof value === 'string' ? value.slice(0, 256) : 'Document'
     const window = BrowserWindow.fromWebContents(event.sender)
-    const options = {
-      type: 'warning' as const,
+    if (!window) {
+      return 'cancel'
+    }
+    const result = await dialog.showMessageBox(window, {
+      type: 'warning',
       title: 'Unsaved changes',
       message: `Save changes to ${fileName}?`,
       detail: 'Your changes will be lost if you discard them.',
@@ -125,169 +266,156 @@ export function registerIpcHandlers(): void {
       defaultId: 0,
       cancelId: 2,
       noLink: true
-    }
-    const result = window
-      ? await dialog.showMessageBox(window, options)
-      : await dialog.showMessageBox(options)
+    })
     return ['save', 'discard', 'cancel'][result.response] ?? 'cancel'
   })
-  ipcMain.handle('app:version', () => '0.1.0')
-
-  ipcMain.handle('dialog:openFile', async () => {
-    const window = BrowserWindow.getFocusedWindow()
-    const options = {
+  handle('app:version', () => app.getVersion())
+  handle('dialog:openFile', async event => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) {
+      return null
+    }
+    const result = await dialog.showOpenDialog(window, {
       title: 'Open Markdown File',
       filters: [
         { name: 'Markdown Files', extensions: ['md', 'markdown', 'mdx', 'txt'] },
         { name: 'All Files', extensions: ['*'] }
       ],
-      properties: ['openFile' as const]
-    }
-    const result = window
-      ? await dialog.showOpenDialog(window, options)
-      : await dialog.showOpenDialog(options)
-
-    if (result.canceled || result.filePaths.length === 0) {
-      return null
-    }
-
-    const filePath = result.filePaths[0]
-    if (!filePath) {
-      return null
-    }
-
-    const content = await readFile(filePath, 'utf-8')
-    return { path: filePath, content }
+      properties: ['openFile']
+    })
+    assertCurrent(event)
+    return result.canceled || !result.filePaths[0] ? null : access(event).open(result.filePaths[0])
   })
-
-  ipcMain.handle('dialog:saveFile', async (_, content: string, filePath?: string) => {
-    let targetPath = filePath
-
-    if (!targetPath) {
-      const window = BrowserWindow.getFocusedWindow()
-      const options = {
-        title: 'Save Markdown File',
-        defaultPath: 'Untitled.md',
-        filters: [
-          { name: 'Markdown Files', extensions: ['md', 'markdown'] },
-          { name: 'All Files', extensions: ['*'] }
-        ]
+  handle('document:refresh', (event, path) => access(event).refresh(checkedPath(path)))
+  handle('document:page', (event, handle, offset) => {
+    if (typeof handle !== 'string' || typeof offset !== 'number') {
+      throw new Error('Invalid page request.')
+    }
+    return access(event).page(handle, offset)
+  })
+  handle('document:closeReader', (event, handle) => {
+    if (typeof handle !== 'string') {
+      throw new Error('Invalid reader.')
+    }
+    return access(event).closeReader(handle)
+  })
+  handle('dialog:saveFile', async (event, value, path, expected) => {
+    const content = checkedContent(value)
+    const fileAccess = access(event)
+    if (path !== undefined) {
+      await fileAccess.save(checkedPath(path), content, checkedContent(expected))
+      return path
+    }
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) {
+      return null
+    }
+    const result = await dialog.showSaveDialog(window, {
+      title: 'Save Markdown File',
+      defaultPath: 'Untitled.md',
+      filters: [{ name: 'Markdown Files', extensions: ['md', 'markdown'] }]
+    })
+    if (result.canceled || !result.filePath) {
+      return null
+    }
+    assertCurrent(event)
+    await fileAccess.saveAsText(result.filePath, content)
+    return result.filePath
+  })
+  for (const format of ['pdf', 'html', 'txt']) {
+    handle(`export:${format}`, async (event, value, rawTitle) => {
+      const content = checkedContent(value, exportCharacters)
+      const title = typeof rawTitle === 'string' ? rawTitle.slice(0, 256) : 'Document'
+      if (exports.has(event.sender.id) || exports.size >= 2) {
+        throw new Error('An export is already running.')
       }
-      const result = window
-        ? await dialog.showSaveDialog(window, options)
-        : await dialog.showSaveDialog(options)
-
-      if (result.canceled || !result.filePath) {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (!window) {
         return null
       }
-      targetPath = result.filePath
-    }
-
-    await writeFile(targetPath, content, 'utf-8')
-    return targetPath
-  })
-
-  ipcMain.handle('fs:readFile', async (_, filePath: string) => {
-    return await readFile(filePath, 'utf-8')
-  })
-
-  ipcMain.handle('export:pdf', async (_, htmlContent: string) => {
-    const window = BrowserWindow.getFocusedWindow()
-    const options = {
-      title: 'Export Document to PDF',
-      defaultPath: 'Document.pdf',
-      filters: [{ name: 'PDF Documents', extensions: ['pdf'] }]
-    }
-    const result = window
-      ? await dialog.showSaveDialog(window, options)
-      : await dialog.showSaveDialog(options)
-
-    if (result.canceled || !result.filePath) {
-      return null
-    }
-
-    const printWindow = new BrowserWindow({
-      show: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true
+      exports.add(event.sender.id)
+      try {
+        const result = await dialog.showSaveDialog(window, {
+          title: `Export ${format.toUpperCase()}`,
+          defaultPath: `Document.${format}`,
+          filters: [{ name: format.toUpperCase(), extensions: [format] }]
+        })
+        if (result.canceled || !result.filePath) {
+          return null
+        }
+        assertCurrent(event)
+        const fileAccess = access(event)
+        const expected = await fileAccess.prepareSaveAs(result.filePath)
+        const rendered = await renderExport(content, title, format)
+        let bytes: Uint8Array = Buffer.from(rendered)
+        if (format === 'pdf') {
+          const print = new BrowserWindow({
+            show: false,
+            webPreferences: {
+              nodeIntegration: false,
+              contextIsolation: true,
+              sandbox: true,
+              javascript: false,
+              partition: `marka-print-${randomUUID()}`
+            }
+          })
+          print.webContents.session.setPermissionRequestHandler(
+            (_contents, _permission, callback) => callback(false)
+          )
+          print.webContents.session.setPermissionCheckHandler(() => false)
+          print.webContents.session.webRequest.onBeforeRequest((details, callback) =>
+            callback({ cancel: !details.url.startsWith('data:') })
+          )
+          print.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+          print.webContents.on('will-navigate', event => event.preventDefault())
+          let timer: ReturnType<typeof setTimeout> | undefined
+          try {
+            bytes = await Promise.race([
+              print
+                .loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(rendered)}`)
+                .then(() =>
+                  print.webContents.printToPDF({
+                    printBackground: true,
+                    pageSize: 'A4',
+                    margins: { top: 0.75, bottom: 0.75, left: 0.75, right: 0.75 }
+                  })
+                ),
+              new Promise<never>((_resolve, reject) => {
+                timer = setTimeout(() => reject(new Error('PDF printing timed out.')), 20_000)
+              })
+            ])
+          } finally {
+            clearTimeout(timer)
+            print.destroy()
+          }
+        }
+        assertCurrent(event)
+        await fileAccess.saveAs(result.filePath, bytes, expected, () => assertCurrent(event))
+        return result.filePath
+      } finally {
+        exports.delete(event.sender.id)
       }
     })
-
-    try {
-      await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`)
-      const pdfData = await printWindow.webContents.printToPDF({
-        printBackground: true,
-        pageSize: 'A4',
-        margins: {
-          marginType: 'custom',
-          top: 0.75,
-          bottom: 0.75,
-          left: 0.75,
-          right: 0.75
+  }
+  for (const action of ['minimize', 'maximize', 'close']) {
+    ipcMain.on(`window:${action}`, event => {
+      if (!trustedSender(event)) {
+        return
+      }
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (action === 'minimize') {
+        window?.minimize()
+      }
+      if (action === 'close') {
+        window?.close()
+      }
+      if (action === 'maximize') {
+        if (window?.isMaximized()) {
+          window.unmaximize()
+        } else {
+          window?.maximize()
         }
-      })
-      await writeFile(result.filePath, pdfData)
-      return result.filePath
-    } finally {
-      printWindow.destroy()
-    }
-  })
-
-  ipcMain.handle('export:html', async (_, htmlContent: string) => {
-    const window = BrowserWindow.getFocusedWindow()
-    const options = {
-      title: 'Export Document to HTML',
-      defaultPath: 'Document.html',
-      filters: [{ name: 'HTML Document', extensions: ['html', 'htm'] }]
-    }
-    const result = window
-      ? await dialog.showSaveDialog(window, options)
-      : await dialog.showSaveDialog(options)
-
-    if (result.canceled || !result.filePath) {
-      return null
-    }
-
-    await writeFile(result.filePath, htmlContent, 'utf-8')
-    return result.filePath
-  })
-
-  ipcMain.handle('export:txt', async (_, textContent: string) => {
-    const window = BrowserWindow.getFocusedWindow()
-    const options = {
-      title: 'Export Document to Plain Text',
-      defaultPath: 'Document.txt',
-      filters: [{ name: 'Text Document', extensions: ['txt'] }]
-    }
-    const result = window
-      ? await dialog.showSaveDialog(window, options)
-      : await dialog.showSaveDialog(options)
-
-    if (result.canceled || !result.filePath) {
-      return null
-    }
-
-    await writeFile(result.filePath, textContent, 'utf-8')
-    return result.filePath
-  })
-
-  ipcMain.on('window:minimize', event => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    window?.minimize()
-  })
-
-  ipcMain.on('window:maximize', event => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (window?.isMaximized()) {
-      window.unmaximize()
-    } else {
-      window?.maximize()
-    }
-  })
-
-  ipcMain.on('window:close', event => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    window?.close()
-  })
+      }
+    })
+  }
 }

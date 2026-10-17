@@ -186,7 +186,7 @@ export function registerFileIpc(): void {
 
 - `contextIsolation: true` — bắt buộc
 - `nodeIntegration: false` — bắt buộc
-- `sandbox: false` — chỉ tắt khi preload cần Node APIs
+- `sandbox: true` — bắt buộc; preload đóng gói CommonJS, chỉ dùng API IPC được hỗ trợ trong sandbox
 - CSP header trong HTML entry
 
 ---

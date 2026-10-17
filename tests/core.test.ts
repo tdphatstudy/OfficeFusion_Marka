@@ -35,6 +35,7 @@ const api: Pick<
   | 'confirmClose'
   | 'saveConnectedDocument'
   | 'openConnectedDocument'
+  | 'refreshFile'
 > = {
   saveConnectedDocument: async () => 'ssh://dev/home/me/notes.md',
   openConnectedDocument: async () => ({
@@ -44,6 +45,7 @@ const api: Pick<
     name: 'notes.md'
   }),
   saveFile: async () => '/notes.md',
+  refreshFile: async path => ({ path, content: '# Refreshed' }),
   openFile: async () => ({ path: '/opened.md', content: '# Opened' }),
   confirmUnsavedChanges: async () => 'cancel',
   confirmClose: () => {
@@ -59,6 +61,7 @@ beforeEach(() => {
   closed = false
   api.saveFile = async () => '/notes.md'
   api.openFile = async () => ({ path: '/opened.md', content: '# Opened' })
+  api.refreshFile = async path => ({ path, content: '# Refreshed' })
   api.confirmUnsavedChanges = async () => 'cancel'
   api.saveConnectedDocument = async () => 'ssh://dev/home/me/notes.md'
   api.openConnectedDocument = async () => ({
@@ -180,6 +183,70 @@ test('canceling the open picker never discards the current document', async () =
   assert.equal(useEditorStore.getState().content, 'Keep me')
 })
 
+test('math expansion is checked against the final DOM budget', () => {
+  assert.throws(() => renderMarkdown('$x$ '.repeat(2000)), /too complex/)
+})
+
+test('unsupported image sources are guarded before rich parsing can drop them', () => {
+  assert.ok(richModeLimitation('![image](data:image/png;base64,fixture)'))
+  assert.ok(richModeLimitation('![image](data&#58;image/png;base64,fixture)'))
+  assert.ok(richModeLimitation('<img src="data:image/png;base64,fixture">'))
+})
+
+test('reopening a case alias of the dirty file after Save reads the committed snapshot', async () => {
+  let disk = 'Original'
+  let refreshed = 0
+  useEditorStore.getState().openFile('/notes.md', disk)
+  useEditorStore.getState().setContent('Current unsaved edits')
+  api.openFile = async () => ({ path: '/NOTES.md', content: disk })
+  api.saveFile = async content => {
+    disk = content
+    return '/notes.md'
+  }
+  api.confirmUnsavedChanges = async () => 'save'
+  api.refreshFile = async path => {
+    refreshed++
+    return { path, content: disk }
+  }
+  await fileActions.open()
+  assert.equal(refreshed, 1)
+  assert.equal(useEditorStore.getState().content, 'Current unsaved edits')
+  assert.equal(useEditorStore.getState().isDirty, false)
+  assert.equal(disk, 'Current unsaved edits')
+})
+
+test('reopening an SSH file after saving does not install its old snapshot', async () => {
+  let disk = 'Remote original'
+  const location = { kind: 'ssh' as const, host: 'dev', path: '/home/me/notes.md' }
+  const path = 'ssh://dev/home/me/notes.md'
+  useEditorStore.getState().openFile(path, disk, location)
+  useEditorStore.getState().setContent('Remote committed')
+  api.openConnectedDocument = async () => ({ path, content: disk, location, name: 'notes.md' })
+  api.saveConnectedDocument = async (_target, content) => {
+    disk = content
+    return path
+  }
+  api.confirmUnsavedChanges = async () => 'save'
+  await fileActions.openTarget(location)
+  assert.equal(useEditorStore.getState().content, 'Remote committed')
+  assert.equal(useEditorStore.getState().isDirty, false)
+})
+
+test('read-only paged documents cannot be saved as an empty editable buffer', async () => {
+  let writes = 0
+  useEditorStore
+    .getState()
+    .openFile('/large.md', '', undefined, { handle: 'fixture', size: 6 * 1024 * 1024 })
+  api.saveFile = async () => {
+    writes++
+    return '/large.md'
+  }
+  await fileActions.save()
+  await fileActions.saveAs()
+  assert.equal(writes, 0)
+  assert.match(useUIStore.getState().notice?.message ?? '', /read-only/)
+})
+
 test('failed file operations preserve the document and display actionable errors', async () => {
   useEditorStore.getState().setContent('Keep me')
   api.saveFile = async () => {
@@ -252,6 +319,31 @@ test('word counts retain link labels and ignore code blocks', () => {
     countWords('Read [two words](https://example.com)\n\n```js\nconst hidden = true\n```'),
     3
   )
+})
+
+test('word statistics handle adversarial unclosed Markdown within a bounded CPU budget', () => {
+  const source = '!['.repeat(32_000)
+  const started = performance.now()
+  assert.equal(countWords(source), 0)
+  assert.ok(performance.now() - started < 750)
+  assert.equal(countWords('one <u>two</u> [three words](https://example.com/a) `hidden code`'), 4)
+})
+
+test('outline limits prevent unbounded parse and heading DOM work', () => {
+  assert.equal(getHeadings('# H\n'.repeat(2000)).length, 500)
+  assert.deepEqual(getHeadings('x'.repeat(128 * 1024 + 1)), [])
+})
+
+test('render budgets reject oversized lines documents and excessive nodes', () => {
+  assert.throws(() => renderMarkdown('x'.repeat(16_385)), /budget/)
+  assert.throws(() => renderMarkdown('a\n'.repeat(140_000)), /budget/)
+  assert.throws(() => renderMarkdown('*a*\n\n'.repeat(7000)), /complex/)
+})
+
+test('math trust and layout limits remain enforced after plugin transforms', () => {
+  const output = renderMarkdown('$\\rule{999999em}{999999em}$\n\n$\\href{javascript:alert(1)}{x}$')
+  assert.doesNotMatch(output, /height:999999em|width:999999em|href="javascript:/)
+  assert.match(output, /20em/)
 })
 
 test('outline displays formatted heading text without HTML tags or code-block impostors', () => {

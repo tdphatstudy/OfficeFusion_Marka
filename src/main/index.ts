@@ -1,9 +1,21 @@
-import { app, shell, BrowserWindow, ipcMain, Menu } from 'electron'
-import { join } from 'path'
+import { app, shell, BrowserWindow, ipcMain, Menu, protocol, net, session } from 'electron'
+import { join, resolve, sep } from 'path'
+import { pathToFileURL } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc'
+import { trustWindow, trustedSender } from './ipc/security'
+import { migrateLegacyStorage, inertMigrationHtml } from './storageMigration'
 
-function createWindow(): void {
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'marka',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
+  }
+])
+
+let migration: Promise<void> | undefined
+
+async function createWindow(): Promise<void> {
   const isMac = process.platform === 'darwin'
   const mainWindow = new BrowserWindow({
     width: 1280,
@@ -18,8 +30,8 @@ function createWindow(): void {
       ? { icon: join(__dirname, '../../resources/icon.png') }
       : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
-      sandbox: false,
+      preload: join(__dirname, '../preload/index.cjs'),
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
@@ -37,14 +49,14 @@ function createWindow(): void {
     }
   })
   const approveClose = (event: Electron.IpcMainEvent): void => {
-    if (event.sender === mainWindow.webContents) {
+    if (trustedSender(event) && event.sender === mainWindow.webContents) {
       closeApproved = true
       mainWindow.close()
     }
   }
   ipcMain.on('window:confirmClose', approveClose)
   const updateCloseGuard = (event: Electron.IpcMainEvent, ready: boolean): void => {
-    if (event.sender === mainWindow.webContents) {
+    if (trustedSender(event) && event.sender === mainWindow.webContents) {
       closeGuardReady = ready === true
     }
   }
@@ -81,29 +93,61 @@ function createWindow(): void {
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    const url = new URL(process.env['ELECTRON_RENDERER_URL']).href
+    trustWindow(mainWindow, url)
+    mainWindow.loadURL(url)
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    migration ??= migrateLegacyStorage(
+      pathToFileURL(join(__dirname, '../renderer/index.html')).href
+    )
+    try {
+      await migration
+    } catch {
+      await mainWindow.loadURL(
+        'data:text/html,<p>Marka could not migrate document recovery. Close the app and retry. Your previous draft storage is retained.</p>'
+      )
+      mainWindow.show()
+      return
+    }
+    trustWindow(mainWindow, 'marka://app/index.html')
+    mainWindow.loadURL('marka://app/index.html')
   }
 }
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.officefusion.marka')
   Menu.setApplicationMenu(null)
+  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
+    callback(false)
+  )
+  session.defaultSession.setPermissionCheckHandler(() => false)
+  session.defaultSession.on('will-download', event => event.preventDefault())
+  protocol.handle('marka', request => {
+    const url = new URL(request.url)
+    const root = resolve(__dirname, '../renderer')
+    const path = resolve(root, `.${decodeURIComponent(url.pathname)}`)
+    if (url.hostname !== 'app' || request.method !== 'GET' || !path.startsWith(`${root}${sep}`)) {
+      return new Response('Forbidden', { status: 403 })
+    }
+    if (url.pathname === '/__migration__') {
+      return new Response(inertMigrationHtml, {
+        headers: { 'content-type': 'text/html; charset=utf-8' }
+      })
+    }
+    return net.fetch(pathToFileURL(path).href)
+  })
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  ipcMain.on('ping', () => console.info('pong'))
-
   registerIpcHandlers()
 
-  createWindow()
+  void createWindow()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      void createWindow()
     }
   })
 })

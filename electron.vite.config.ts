@@ -13,7 +13,10 @@ export default defineConfig({
     build: {
       rollupOptions: { external: ['ssh2'] },
       lib: {
-        entry: resolve(__dirname, 'src/main/index.ts')
+        entry: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          exportWorker: resolve(__dirname, 'src/main/exportWorker.ts')
+        }
       }
     },
     resolve: {
@@ -25,8 +28,10 @@ export default defineConfig({
   preload: {
     build: {
       lib: {
-        entry: resolve(__dirname, 'src/preload/index.ts')
-      }
+        entry: resolve(__dirname, 'src/preload/index.ts'),
+        formats: ['cjs']
+      },
+      rollupOptions: { output: { entryFileNames: 'index.cjs' } }
     }
   },
   renderer: {

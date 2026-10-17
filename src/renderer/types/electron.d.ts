@@ -5,6 +5,7 @@ import type {
   SshCredentials,
   FileLocation
 } from '../../shared/connections'
+import type { OpenedFile, DocumentPage } from '../../shared/documents'
 
 export interface ElectronAPI {
   connectionCapabilities: () => Promise<ConnectionCapabilities>
@@ -19,17 +20,19 @@ export interface ElectronAPI {
   ) => Promise<string>
   cancelConnection: () => void
   chooseConnectionKey: () => Promise<string | null>
-  openFile: () => Promise<{ path: string; content: string } | null>
-  saveFile: (content: string, filePath?: string) => Promise<string | null>
+  openFile: () => Promise<OpenedFile | null>
+  saveFile: (content: string, filePath?: string, expectedContent?: string) => Promise<string | null>
+  refreshFile: (path: string) => Promise<OpenedFile>
+  readPage: (handle: string, offset: number) => Promise<DocumentPage>
+  closeReader: (handle: string) => Promise<void>
   confirmUnsavedChanges: (fileName: string) => Promise<'save' | 'discard' | 'cancel'>
   confirmClose: () => void
   onCloseRequested: (callback: () => void) => () => void
-  readFile: (filePath: string) => Promise<string>
   minimize: () => void
   maximize: () => void
   close: () => void
-  exportPdf: (htmlContent: string) => Promise<string | null>
-  exportHtml: (htmlContent: string) => Promise<string | null>
+  exportPdf: (content: string, title?: string) => Promise<string | null>
+  exportHtml: (content: string, title?: string) => Promise<string | null>
   exportTxt: (textContent: string) => Promise<string | null>
 }
 

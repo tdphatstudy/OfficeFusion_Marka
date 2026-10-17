@@ -2,10 +2,14 @@ import { fileActions } from '@/lib/fileActions'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
 import type { ViewMode } from '@/types/editor'
+import { flushEditor } from './editorSession'
 
 export function richModeLimitation(content: string): string | null {
   if (content.length > 100_000) {
     return 'Large documents use Markdown or Split for faster editing.'
+  }
+  if (/<img\b/i.test(content) || (/!\[/.test(content) && /data:|blob:|&#/i.test(content))) {
+    return 'Embedded or HTML images stay in Markdown mode to preserve their source without decoding untrusted image data.'
   }
   if (
     /^---\r?\n/.test(content) ||
@@ -17,6 +21,11 @@ export function richModeLimitation(content: string): string | null {
 }
 
 export function changeViewMode(mode: ViewMode): void {
+  flushEditor()
+  if (useEditorStore.getState().pagedDocument) {
+    useUIStore.getState().notify('This file is open in the read-only large file viewer.')
+    return
+  }
   const limitation = mode === 'rich' ? richModeLimitation(useEditorStore.getState().content) : null
   if (limitation) {
     useUIStore.getState().notify(limitation)
@@ -26,6 +35,7 @@ export function changeViewMode(mode: ViewMode): void {
 }
 
 export function findInDocument(): void {
+  flushEditor()
   const state = useEditorStore.getState()
   useUIStore.getState().setFindRequested(true)
   if (state.viewMode === 'rich') {

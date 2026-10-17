@@ -12,6 +12,9 @@ import { Notifications } from '@/components/layout/Notifications'
 import { ConnectionHub } from '@/components/layout/ConnectionHub'
 import { DocumentToolbar } from '@/components/layout/DocumentToolbar'
 import { useCompactLayout } from '@/hooks/useCompactLayout'
+import { useRecoveryStartup } from '@/hooks/useRecoveryStartup'
+import { RecoveryDialog } from '@/components/layout/RecoveryDialog'
+import { fileActions } from '@/lib/fileActions'
 
 const RichEditor = lazy(() =>
   import('@/components/editor/RichEditor').then(module => ({ default: module.RichEditor }))
@@ -24,25 +27,36 @@ const MarkdownPreview = lazy(() =>
     default: module.MarkdownPreview
   }))
 )
+const PagedViewer = lazy(() =>
+  import('@/components/editor/PagedViewer').then(module => ({ default: module.PagedViewer }))
+)
 
 const EditorWorkspace: FC = () => {
   const viewMode = useEditorStore(state => state.viewMode)
   const documentId = useEditorStore(state => state.documentId)
+  const paged = useEditorStore(state => state.pagedDocument)
   const limitation = useEditorStore(state =>
-    state.viewMode === 'rich' ? richModeLimitation(state.content) : null
+    state.viewMode === 'rich' && !state.pagedDocument ? richModeLimitation(state.content) : null
   )
   const [ratio, setRatio] = useState(50)
   const workspace = useRef<HTMLDivElement>(null)
-  const effectiveMode = limitation ? 'split' : viewMode
+  const effectiveMode = limitation ? 'source' : viewMode
 
   useEffect(() => {
     if (limitation) {
-      useEditorStore.getState().setViewMode('split')
+      useEditorStore.getState().setViewMode('source')
       useUIStore.getState().notify(limitation)
     }
   }, [limitation])
 
   const split = effectiveMode === 'split'
+  if (paged) {
+    return (
+      <Suspense fallback={<p className="p-4">Opening file viewer…</p>}>
+        <PagedViewer key={paged.handle} document={paged} />
+      </Suspense>
+    )
+  }
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       {effectiveMode !== 'rich' && <DocumentToolbar />}
@@ -136,7 +150,16 @@ const RecoveryBanner: FC = () => {
       role="status"
       className="flex items-center justify-between gap-3 border-b border-border bg-accent/10 px-4 py-2 text-xs"
     >
-      <span>Recovered your unsaved draft. Review it and save when ready.</span>
+      <span>Recovered your unsaved draft. Save a copy to keep these changes.</span>
+      <button
+        type="button"
+        onClick={() => {
+          void fileActions.saveAs()
+        }}
+        className="rounded px-2 py-1 font-medium text-accent"
+      >
+        Save a copy…
+      </button>
       <button
         type="button"
         onClick={useEditorStore.getState().dismissRecovery}
@@ -156,6 +179,15 @@ const App: FC = () => {
   const compactSidebarOpen = useUIStore(state => state.compactSidebarOpen)
   const focusMode = useUIStore(state => state.focusMode)
   const compact = useCompactLayout()
+  const recovery = useRecoveryStartup()
+  const paged = useEditorStore(state => state.pagedDocument)
+  if (!recovery.ready) {
+    return (
+      <div role="status" className="p-6">
+        Preparing document recovery…
+      </div>
+    )
+  }
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -166,7 +198,7 @@ const App: FC = () => {
         <TitleBar />
         <RecoveryBanner />
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {(compact ? compactSidebarOpen : sidebarOpen) && !focusMode && <Sidebar />}
+          {(compact ? compactSidebarOpen : sidebarOpen) && !focusMode && !paged && <Sidebar />}
           <main
             aria-label="Document editor"
             className="flex min-w-0 flex-1 flex-col overflow-hidden"
@@ -178,6 +210,12 @@ const App: FC = () => {
         <CommandPalette />
         <SettingsDialog />
         <ConnectionHub />
+        <RecoveryDialog
+          choices={recovery.choices}
+          recover={recovery.recover}
+          discard={recovery.discard}
+          dismiss={recovery.dismiss}
+        />
         <Notifications />
       </div>
     </TooltipProvider>

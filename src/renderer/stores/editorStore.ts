@@ -2,8 +2,10 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { readDraft } from '@/lib/draft'
 import { preferenceStorage } from '@/lib/preferenceStorage'
+import { defaultConfig } from '@/lib/preferences'
 import type { EditorConfig, ViewMode } from '@/types/editor'
 import type { FileLocation } from '../../shared/connections'
+import type { PagedDocument } from '../../shared/documents'
 
 interface EditorState {
   content: string
@@ -14,10 +16,11 @@ interface EditorState {
   fileName: string
   isDirty: boolean
   recovered: boolean
+  pagedDocument: PagedDocument | null
   viewMode: ViewMode
   config: EditorConfig
   setContent: (content: string) => void
-  openFile: (path: string, content: string, location?: FileLocation) => void
+  openFile: (path: string, content: string, location?: FileLocation, paged?: PagedDocument) => void
   markSaved: (path: string, content: string, documentId: number) => void
   setViewMode: (mode: ViewMode) => void
   toggleFullWidth: () => void
@@ -42,19 +45,11 @@ export const useEditorStore = create<EditorState>()(
       fileName: draft?.filePath?.split(/[\\/]/).pop() ?? 'Untitled.md',
       isDirty: draft !== null,
       recovered: draft !== null,
+      pagedDocument: null,
       viewMode: 'rich',
-      config: {
-        fontSize: 15,
-        lineHeight: 1.65,
-        wordWrap: true,
-        showLineNumbers: true,
-        tabSize: 2,
-        theme: 'system',
-        fontFamily: 'sans',
-        fullWidth: false
-      },
+      config: { ...defaultConfig },
       setContent: content => set(state => ({ content, isDirty: content !== state.savedContent })),
-      openFile: (path, content, location) =>
+      openFile: (path, content, location, paged) =>
         set(state => ({
           documentId: state.documentId + 1,
           filePath: path,
@@ -63,7 +58,8 @@ export const useEditorStore = create<EditorState>()(
           content,
           savedContent: content,
           isDirty: false,
-          recovered: false
+          recovered: false,
+          pagedDocument: paged ?? null
         })),
       markSaved: (path, content, documentId) =>
         set(state => {
@@ -95,7 +91,8 @@ export const useEditorStore = create<EditorState>()(
           fileLocation: null,
           fileName: name,
           isDirty: content !== '',
-          recovered: false
+          recovered: false,
+          pagedDocument: null
         })),
       dismissRecovery: () => set({ recovered: false })
     }),

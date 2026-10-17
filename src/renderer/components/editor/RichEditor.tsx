@@ -18,6 +18,52 @@ import { DocumentToolbar } from '@/components/layout/DocumentToolbar'
 import { useEditorStore } from '@/stores/editorStore'
 import { cn } from '@/lib/utils'
 import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
+import { Extension } from '@tiptap/core'
+import { Plugin } from '@tiptap/pm/state'
+import { useUIStore } from '@/stores/uiStore'
+
+const richBudget = Extension.create({
+  name: 'richBudget',
+  addProseMirrorPlugins() {
+    const editor = this.editor
+    return [
+      new Plugin({
+        filterTransaction: transaction => {
+          if (!transaction.docChanged) {
+            return true
+          }
+          const content: string = editor.storage.markdown.serializer.serialize(transaction.doc)
+          let embeddedImage = false
+          transaction.doc.descendants(node => {
+            if (node.type.name === 'image' && /^(?:data|blob):/i.test(String(node.attrs.src))) {
+              embeddedImage = true
+            }
+            return !embeddedImage
+          })
+          if (embeddedImage) {
+            useUIStore
+              .getState()
+              .notify(
+                'Embedded images are not supported in Write mode. Keep the image reference in Markdown mode.',
+                true
+              )
+            return false
+          }
+          if (content.length > 100_000 || content.includes('\0') || !content.isWellFormed()) {
+            useUIStore
+              .getState()
+              .notify(
+                'Edit rejected: Write mode is limited to 100,000 characters. Switch to Markdown mode for larger text.',
+                true
+              )
+            return false
+          }
+          return true
+        }
+      })
+    ]
+  }
+})
 
 export const RichEditor: FC = () => {
   const content = useEditorStore.getState().content
@@ -26,6 +72,7 @@ export const RichEditor: FC = () => {
 
   const editor = useEditor({
     extensions: [
+      richBudget,
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4, 5, 6]
@@ -61,7 +108,7 @@ export const RichEditor: FC = () => {
       }),
       Image.configure({
         inline: true,
-        allowBase64: true
+        allowBase64: false
       }),
       CalloutExtension,
       SlashCommandExtension

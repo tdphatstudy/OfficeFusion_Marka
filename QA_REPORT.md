@@ -153,3 +153,69 @@ Quy ước thiết kế, nguồn khảo sát và cách tạo lại asset ở [DE
 Không thêm dependency hoặc thay đổi SSH authentication trong đợt này. Các giới hạn native
 macOS/Linux, installer, user study, screen reader audit và startup/memory benchmark ở trên vẫn áp
 dụng.
+
+## Đợt 4 — Performance, security và file safety (17/10/2026)
+
+Môi trường: Windows, Node 20.19.5, pnpm 9, Electron 44.9.0, electron-builder 26.15.3. Bảng này là
+kết quả hiện tại; các số liệu và giới hạn ở các đợt trước là lịch sử.
+
+| Kiểm tra                                                           | Kết quả                       |
+| ------------------------------------------------------------------ | ----------------------------- |
+| ESLint, TypeScript main/preload + renderer                         | Pass                          |
+| Regression (`pnpm test`)                                           | 83/83 pass                    |
+| Native editor (`pnpm test:smoke`)                                  | 27/27 pass                    |
+| Connections (`MARKA_TEST_WSL_DISTRO=Ubuntu pnpm test:connections`) | 19/19 pass                    |
+| Native security (`pnpm test:security`)                             | 14/14 pass                    |
+| Windows unpacked package                                           | Pass, không publish, không ký |
+| ASAR runtime (`pnpm test:package`)                                 | 2/2 pass                      |
+| Production dependency audit                                        | 0 advisory                    |
+
+Test mới bao phủ: file vượt 5 MiB qua viewer 64 KiB, offset 10 GiB bằng mock đọc có allocation giới
+hạn, UTF-8 bị chia giữa page/short read, file đổi khi xem, xung đột giữa hai FileAccess, write
+serialize, replace lỗi giữ bản gốc/cleanup stage, thao tác hết quyền trước commit, external write
+ngay sau commit không trở thành baseline, Save As grants có giới hạn, BOM/CRLF, hardlinks và file
+chưa cấp quyền. Native test thêm sender không tin cậy, payload/handle sai, sandbox thật, PDF
+script-disabled, recovery sau reload, key phải qua picker, migration từ file-origin và bảo toàn ảnh
+nhúng qua edit/Save.
+
+Recovery có test session isolation, newest-first với 40 metadata records, cap 32 không âm thầm xóa,
+quota failure giữ checkpoint cũ và max-wait khi edit liên tục. Editor có byte-admission cho paste
+UTF-8, kể cả boundary surrogate/emoji, và Write có giới hạn riêng; final tree budget được test sau
+KaTeX mở rộng. Preview queue giữ một active/một latest pending, timeout/abort và loại response stale
+được kiểm tra.
+
+Review độc lập phát hiện và vòng test đã sửa: revision export lấy quá muộn, reopen alias bị stale,
+debounce recovery không flush khi gõ liên tục, index chỉ lấy UUID đầu, paste vượt budget không lưu
+được, plugin unified bị deduplicate khiến final tree guard không chạy, image bị Rich parser bỏ,
+short range read không tiến, ACL bị broaden khi copy/rename, và closed-window cleanup truy cập
+webContents đã destroy. WSL fixture lặp tìm được birthtime thay đổi giả; identity hiện dùng standard
+device/inode cùng hash và change metadata. Test giữ original/draft khi từ chối thao tác.
+
+Windows ACL fixture dùng owner-only protected DACL, xác nhận Owner/Group/DACL khớp sau stage/Save.
+Stage rỗng được tạo với ACL trước khi ghi dữ liệu, không dựa vào copyFile để bảo toàn DACL. Bộ test
+chỉ dùng mật khẩu/keys sinh trong fixture, HTTP/SSH localhost và file WSL `/tmp` sinh riêng; không
+dùng key/agent cá nhân hay host thật.
+
+Benchmark warm trong process (`node scripts/benchmark-editor.mjs`,30samples/case): malformed
+word-count 16 KB median 0.143 ms / p95 0.295 ms;64 KB median 0.544 ms;256 KB median 2.304 ms.
+Transaction admission/update trên document 4,370,000 characters median 0.121 ms / p95 0.729 ms; số
+này không bao gồm layout, serialization checkpoint hay toàn bộ input-to-paint. Source 10.000 dòng mở
+84 ms ở lượt native cuối, DOM <500 line elements. Các số đo là local, không phải cam kết
+latency/RSS.
+
+Windows package dùng allowlist runtime/assets, loại project source/private research/fixture khỏi
+ASAR. Packaged-ASAR module được launch trong Electron 44 với profile riêng, kiểm preload, preview
+worker và PDF export worker thật. Chưa kiểm installer, signing/notarization hoặc OS integration của
+Marka.exe. Loại optional cpu-features để dùng fallback JavaScript của ssh2 đã được native mock test;
+đóng gói không cần cài C++ toolchain cho addon này.
+
+Full development audit còn 4 findings (1 high / 3 moderate: braces, sprintf-js,
+postcss-selector-parser), trong khi production-only audit sạch. Chưa có bản upstream fix cho một số
+finding; không ép transitive major versions chỉ để làm báo cáo audit về 0. Danh sách/giới hạn vận
+hành ở [RELIABILITY.md](./RELIABILITY.md).
+
+Các giới hạn còn lại: file 10 GiB thật/RSS chưa benchmark, viewer read-only, chưa CRDT/merge UI,
+external-writer finalcheck/rename race chưa strict CAS, chưa chứng nhận power-loss durability,
+SACL/ADS/EFS hoặc metadata trên mọi filesystem. macOS existing-file replacement fail closed và
+native macOS/Linux UI chưa được chứng nhận. Origin migration 44 được test, chưa certify nâng định
+dạng database Chromium 33→44. Các giới hạn này không được coi là testcase đã pass.

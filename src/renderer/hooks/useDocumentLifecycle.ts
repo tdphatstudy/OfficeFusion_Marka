@@ -1,25 +1,28 @@
 import { useEffect } from 'react'
-import { draftKey } from '@/lib/draft'
 import { fileActions } from '@/lib/fileActions'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
+import { registerRecoveryFlush, saveRecovery } from '@/lib/recovery'
+import { flushEditor } from '@/lib/editorSession'
+import { createCheckpoint } from '@/lib/checkpoint'
 
 export function useDocumentLifecycle(): void {
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined
     let storageFailed = false
-    const flush = (): void => {
-      clearTimeout(timer)
-      const { content, savedContent, filePath, fileLocation, isDirty } = useEditorStore.getState()
+    const checkpoint = createCheckpoint(() => {
+      void flush()
+    })
+    const flush = async (): Promise<void> => {
+      checkpoint.reset()
+      flushEditor()
+      const { content, savedContent, filePath, fileLocation, isDirty, pagedDocument } =
+        useEditorStore.getState()
       try {
-        if (isDirty) {
-          localStorage.setItem(
-            draftKey,
-            JSON.stringify({ content, savedContent, filePath, location: fileLocation })
-          )
-        } else {
-          localStorage.removeItem(draftKey)
-        }
+        await saveRecovery(
+          isDirty && !pagedDocument
+            ? { content, savedContent, filePath, location: fileLocation ?? undefined }
+            : null
+        )
         storageFailed = false
       } catch {
         if (!storageFailed) {
@@ -30,6 +33,7 @@ export function useDocumentLifecycle(): void {
         }
       }
     }
+    const unregister = registerRecoveryFlush(flush)
     const unsubscribe = useEditorStore.subscribe((state, previous) => {
       if (
         state.content === previous.content &&
@@ -39,22 +43,21 @@ export function useDocumentLifecycle(): void {
       ) {
         return
       }
-      clearTimeout(timer)
-      if (state.documentId !== previous.documentId || !state.isDirty) {
-        flush()
-      } else {
-        timer = setTimeout(flush, 600)
-      }
+      checkpoint.schedule(state.documentId !== previous.documentId || !state.isDirty)
     })
     const removeCloseListener = window.api.onCloseRequested(() => {
       void fileActions.close()
     })
-    window.addEventListener('beforeunload', flush)
+    const unload = (): void => {
+      void flush()
+    }
+    window.addEventListener('beforeunload', unload)
     return () => {
-      flush()
+      checkpoint.reset()
       unsubscribe()
+      unregister()
       removeCloseListener()
-      window.removeEventListener('beforeunload', flush)
+      window.removeEventListener('beforeunload', unload)
     }
   }, [])
 }

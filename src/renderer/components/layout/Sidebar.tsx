@@ -32,9 +32,15 @@ const Sidebar: FC = () => {
       <nav aria-label="Document headings" className="min-h-0 flex-1 overflow-auto px-2 py-3">
         {headings.length === 0 ? (
           <div className="px-1 py-2 text-xs text-text-muted">
-            <p>No sections yet</p>
+            <p>
+              {deferredContent.length > 128 * 1024
+                ? 'Outline paused for this large document'
+                : 'No sections yet'}
+            </p>
             <p className="mt-2 leading-relaxed">
-              Add a heading with # or the block menu to navigate your document.
+              {deferredContent.length > 128 * 1024
+                ? 'Use Find in Markdown mode to navigate.'
+                : 'Add a heading with # or the block menu to navigate your document.'}
             </p>
           </div>
         ) : (
@@ -53,6 +59,9 @@ const Sidebar: FC = () => {
           ))
         )}
       </nav>
+      {headings.length === 500 && (
+        <p className="px-4 pb-2 text-xs text-text-muted">Showing the first 500 headings.</p>
+      )}
       <div className="border-t border-border px-4 py-2 text-[11px] text-text-muted">
         OfficeFusion
       </div>

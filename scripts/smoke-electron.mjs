@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { waitForDraft } from './smoke-helpers.mjs'
 
 const require = createRequire(import.meta.url)
 const playwright = await import(process.env.MARKA_PLAYWRIGHT_MODULE || 'playwright')
@@ -16,7 +17,7 @@ const target = resolve(root, 'saved.md')
 const opened = resolve(root, 'opened.md')
 await writeFile(
   harness,
-  `import { app } from 'electron'; app.setPath('userData', ${JSON.stringify(profile)}); await import(${JSON.stringify(pathToFileURL(resolve('out/main/index.js')).href)});`
+  `import { app } from 'electron'; globalThis.mainErrors=[]; process.on('uncaughtException',error=>globalThis.mainErrors.push(error.message)); process.on('unhandledRejection',error=>globalThis.mainErrors.push(String(error))); app.setPath('userData', ${JSON.stringify(profile)}); await import(${JSON.stringify(pathToFileURL(resolve('out/main/index.js')).href)});`
 )
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
@@ -176,11 +177,9 @@ try {
   passed('Editor preferences reconfigure CodeMirror without losing content')
 
   await source.fill('# Recovery\n\nRecover this unsaved text.')
-  await page.waitForFunction(() =>
-    localStorage.getItem('marka-draft-v1')?.includes('Recover this unsaved text.')
-  )
+  await waitForDraft(page, 'Recover this unsaved text.')
   await page.reload()
-  await page.getByText('Recovered your unsaved draft. Review it and save when ready.').waitFor()
+  await page.getByText(/^Recovered your unsaved draft\./).waitFor()
   await page.getByRole('textbox', { name: 'Markdown source' }).waitFor()
   assert.match(
     await page.getByRole('textbox', { name: 'Markdown source' }).innerText(),
@@ -250,6 +249,24 @@ try {
   )
   assert.ok(elapsed < 5000, `Large file opening took ${elapsed.toFixed(0)}ms`)
   passed(`10,000-line source document opens with virtualization (${elapsed.toFixed(0)}ms)`)
+
+  await writeFile(opened, '# Rendering budget\n\n' + 'A bounded paragraph.\n\n'.repeat(15_000))
+  await page.keyboard.press('Control+o')
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('Rendering budget')
+  )
+  await page.getByRole('button', { name: 'Split', exact: true }).click()
+  await page
+    .getByRole('alert')
+    .filter({ hasText: /Preview is paused/ })
+    .waitFor()
+  assert.ok((await page.locator('.cm-line').count()) < 500)
+  passed('Oversized preview pauses visibly while source editing stays virtualized')
+  await writeFile(opened, '# Layout fixture\n\nA small preview for responsive layout checks.')
+  await page.keyboard.press('Control+o')
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('Layout fixture')
+  )
 
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0].setSize(800, 600)
@@ -383,6 +400,7 @@ try {
   await closed
   passed('Native window close completes after Discard')
   assert.deepEqual(errors, [])
+  assert.deepEqual(await app.evaluate(() => globalThis.mainErrors), [])
   passed('Light/dark screenshots captured with no renderer errors')
   console.log(JSON.stringify({ passed: checks.length, errors, artifacts: root }, null, 2))
 } catch (error) {
@@ -396,7 +414,7 @@ try {
 } finally {
   await app
     .evaluate(({ app }) => {
-      app.exit(0)
+      setTimeout(() => app.exit(0), 0)
     })
     .catch(() => undefined)
 }

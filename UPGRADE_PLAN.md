@@ -58,8 +58,8 @@ conflict checks. Hướng dẫn và giới hạn ở [CONNECTIONS.md](./CONNECTI
 
 1. **Workspace và nhiều tài liệu:** mở folder, file tree, tabs, quick open, drag/drop. Cần model
    document riêng cho từng tab, guard close từng tab và recovery theo workspace.
-2. **Lưu trữ vững hơn:** atomic writes, phát hiện file đổi bên ngoài, diff/conflict resolution,
-   autosave tùy chọn và lịch sử phiên bản. Không tự ghi đè thay đổi từ ứng dụng khác.
+2. **Lưu trữ vững hơn:** mở rộng adapter metadata đa nền tảng, diff/conflict resolution, autosave
+   tùy chọn và lịch sử phiên bản. Không tự ghi đè thay đổi từ ứng dụng khác.
 3. **Rich editing hoàn chỉnh:** link/image dialogs có validation, quản lý asset local, thao tác
    hàng/cột bảng, fidelity tests cho callout/HTML và frontmatter inspector.
 4. **Định dạng và xuất bản:** Mermaid sandboxed rendering, DOCX/EPUB với kiểm thử round-trip, cấu
@@ -78,3 +78,15 @@ Regression tests bảo vệ state và I/O orchestration. Smoke tests mở app El
 profile riêng, thao tác UI và ghi file thật. Mỗi lỗi phát hiện được sửa rồi chạy lại nhóm liên quan;
 sau đó chạy lint, cả hai TypeScript project, regression suite, production build và toàn bộ smoke
 suite. Kết quả và giới hạn kiểm chứng được ghi trong [QA_REPORT.md](./QA_REPORT.md).
+
+## Performance và security — triển khai 17/10/2026
+
+Đã bổ sung admission theo UTF-8 byte budget, viewer theo range, Save có kiểm tra revision và stage,
+worker có deadline/coalescing cho preview/export, sandbox và IPC theo owner, recovery theo session
+với max-wait, cùng migration dữ liệu file-origin cũ. Chi tiết giới hạn được công bố trong
+[RELIABILITY.md](./RELIABILITY.md); kết quả kiểm chứng ở [QA_REPORT.md](./QA_REPORT.md).
+
+Các bước tiếp theo: editor out-of-core để sửa file nhiều GiB; diff/merge xung đột; collaborative
+editing có protocol/server và CRDT/OT; metadata adapter macOS/Linux đã chứng nhận; benchmark RSS,
+startup và crash/power-loss trên từng filesystem. Viewer hiện tại là read-only, không phải editor 10
+GiB hoặc hệ thống đồng biên tập thời gian thực.

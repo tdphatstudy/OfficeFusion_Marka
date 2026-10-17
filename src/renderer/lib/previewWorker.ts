@@ -8,8 +8,8 @@ interface PreviewRequest {
 self.onmessage = (event: MessageEvent<PreviewRequest>): void => {
   const { id, content } = event.data
   try {
-    self.postMessage({ id, source: content, html: renderMarkdown(content), error: false })
+    self.postMessage({ id, html: renderMarkdown(content), error: false })
   } catch {
-    self.postMessage({ id, source: content, html: '', error: true })
+    self.postMessage({ id, html: '', error: true })
   }
 }

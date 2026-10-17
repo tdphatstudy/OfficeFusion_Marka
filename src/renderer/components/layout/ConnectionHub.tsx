@@ -381,7 +381,7 @@ const ConnectionForm: FC = () => {
                             Identity file
                             <input
                               value={identityFile}
-                              onChange={event => setIdentityFile(event.target.value)}
+                              readOnly
                               placeholder="Choose a private key explicitly"
                               required
                               disabled={busy}

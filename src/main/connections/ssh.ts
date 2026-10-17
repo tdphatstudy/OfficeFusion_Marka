@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
-import { readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import ssh2, { type ConnectConfig } from 'ssh2'
 import { decodeDocument } from './document'
 import type { SshCredentials, SshLocation } from '../../shared/connections'
+import { readEditable } from '../files'
 
 export function quoteRemotePath(path: string): string {
   const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`
@@ -62,7 +63,11 @@ export async function sshConfig(
     if (!info.isFile() || info.size > 1024 * 1024) {
       throw new Error('Choose a private key file smaller than 1 MB.')
     }
-    config.privateKey = await readFile(credentials.keyPath)
+    const key = Buffer.from((await readEditable(credentials.keyPath)).content)
+    if (key.length > 1024 * 1024) {
+      throw new Error('Choose a private key file smaller than 1 MB.')
+    }
+    config.privateKey = key
     config.passphrase = credentials.passphrase || undefined
     config.authHandler = ['publickey']
   } else {

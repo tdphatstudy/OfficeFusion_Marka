@@ -1,3 +1,5 @@
+import type { PagedDocument } from './documents'
+
 export interface SshLocation {
   kind: 'ssh'
   host: string
@@ -28,6 +30,7 @@ export interface ConnectedDocument {
   location: FileLocation | null
   path: string | null
   name: string
+  paged?: PagedDocument
 }
 
 export interface ConnectionCapabilities {

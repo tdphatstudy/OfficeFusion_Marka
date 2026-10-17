@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, type FC } from 'react'
 import { useEditorStore } from '@/stores/editorStore'
-import { countWords, estimateReadingTime } from '@/lib/utils'
+import { countWords } from '@/lib/utils'
 import { Separator } from '@/components/ui'
 import { useUIStore } from '@/stores/uiStore'
 import { changeViewMode } from '@/lib/commands'
@@ -11,16 +11,31 @@ const StatusBar: FC = () => {
   const location = useEditorStore(state => state.fileLocation)
   const isDirty = useEditorStore(state => state.isDirty)
   const viewMode = useEditorStore(state => state.viewMode)
+  const paged = useEditorStore(state => state.pagedDocument)
   const fileBusy = useUIStore(state => state.fileBusy)
   const deferredContent = useDeferredValue(content)
-  const words = useMemo(() => countWords(deferredContent), [deferredContent])
-  const readingTime = useMemo(() => estimateReadingTime(deferredContent), [deferredContent])
+  const statisticsPaused = deferredContent.length > 256 * 1024
+  const words = useMemo(
+    () => (statisticsPaused ? 0 : countWords(deferredContent)),
+    [deferredContent, statisticsPaused]
+  )
+  const readingTime = Math.max(1, Math.ceil(words / 200))
+  let statistics = `${words.toLocaleString()} words`
+  if (statisticsPaused) {
+    statistics = 'Statistics paused'
+  }
+  if (paged) {
+    statistics = `${(paged.size / 1024 / 1024).toFixed(1)} MiB`
+  }
   let saveStatus = filePath ? '✓ Saved' : 'Local document'
   if (isDirty) {
     saveStatus = '● Unsaved changes'
   }
   if (fileBusy) {
     saveStatus = 'Working…'
+  }
+  if (paged) {
+    saveStatus = 'Read-only viewer'
   }
   const modeLabels = { rich: 'Write mode', split: 'Split view', source: 'Markdown mode' }
 
@@ -36,9 +51,11 @@ const StatusBar: FC = () => {
 
       <Separator orientation="vertical" className="h-3" />
 
-      <span className="shrink-0">{words.toLocaleString()} words</span>
+      <span className="shrink-0">{statistics}</span>
       <Separator orientation="vertical" className="statusbar-reading h-3" />
-      <span className="statusbar-reading shrink-0">{readingTime} min read</span>
+      <span className="statusbar-reading shrink-0">
+        {paged || statisticsPaused ? 'Large document' : `${readingTime} min read`}
+      </span>
 
       {location?.kind === 'ssh' && (
         <button
@@ -65,9 +82,10 @@ const StatusBar: FC = () => {
       <button
         type="button"
         onClick={toggleMode}
+        disabled={paged !== null}
         className="shrink-0 font-medium text-text-secondary hover:underline"
       >
-        {modeLabels[viewMode]}
+        {paged ? 'Read-only' : modeLabels[viewMode]}
       </button>
     </div>
   )

@@ -49,6 +49,7 @@ const TitleBar: FC = () => {
   const pendingEditorAction = useRef<(() => void) | null>(null)
   const fileName = useEditorStore(state => state.fileName)
   const isDirty = useEditorStore(state => state.isDirty)
+  const readOnly = useEditorStore(state => state.pagedDocument !== null)
   const viewMode = useEditorStore(state => state.viewMode)
   const fullWidth = useEditorStore(state => state.config.fullWidth)
   const sidebarOpen = useUIStore(state => state.sidebarOpen)
@@ -143,7 +144,7 @@ const TitleBar: FC = () => {
             </Menu.Item>
             <Menu.Separator className="menu-separator" />
             <Menu.Item
-              disabled={fileBusy}
+              disabled={fileBusy || readOnly}
               className="menu-item"
               onSelect={() => {
                 void fileActions.save()
@@ -152,7 +153,7 @@ const TitleBar: FC = () => {
               Save<kbd>Ctrl S</kbd>
             </Menu.Item>
             <Menu.Item
-              disabled={fileBusy}
+              disabled={fileBusy || readOnly}
               className="menu-item"
               onSelect={() => {
                 void fileActions.saveAs()
@@ -162,7 +163,7 @@ const TitleBar: FC = () => {
             </Menu.Item>
             <Menu.Separator className="menu-separator" />
             <Menu.Item
-              disabled={fileBusy}
+              disabled={fileBusy || readOnly}
               className="menu-item"
               onSelect={() => {
                 void exportDocument('pdf')
@@ -171,7 +172,7 @@ const TitleBar: FC = () => {
               Export PDF
             </Menu.Item>
             <Menu.Item
-              disabled={fileBusy}
+              disabled={fileBusy || readOnly}
               className="menu-item"
               onSelect={() => {
                 void exportDocument('html')
@@ -180,7 +181,7 @@ const TitleBar: FC = () => {
               Export HTML
             </Menu.Item>
             <Menu.Item
-              disabled={fileBusy}
+              disabled={fileBusy || readOnly}
               className="menu-item"
               onSelect={() => {
                 void exportDocument('txt')
@@ -325,7 +326,7 @@ const TitleBar: FC = () => {
         <button
           type="button"
           className="menubar-icon"
-          disabled={fileBusy}
+          disabled={fileBusy || readOnly}
           onClick={() => {
             void fileActions.save()
           }}
