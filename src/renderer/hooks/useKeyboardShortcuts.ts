@@ -13,6 +13,14 @@ export function useKeyboardShortcuts(): void {
       }
       const key = event.key.toLowerCase()
       const ui = useUIStore.getState()
+      if (
+        document.querySelector('[role="dialog"][data-state="open"]') &&
+        !ui.commandOpen &&
+        !ui.connectionsOpen &&
+        !ui.settingsOpen
+      ) {
+        return
+      }
       if (key === 'k' && !event.shiftKey) {
         event.preventDefault()
         if (!ui.settingsOpen && !ui.connectionsOpen) {

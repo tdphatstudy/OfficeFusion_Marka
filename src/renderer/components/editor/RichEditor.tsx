@@ -16,6 +16,7 @@ import { BubbleMenu } from './BubbleMenu'
 import { EditorToolbar } from './EditorToolbar'
 import { DocumentToolbar } from '@/components/layout/DocumentToolbar'
 import { useEditorStore } from '@/stores/editorStore'
+import { RichFind } from './RichFind'
 import { cn } from '@/lib/utils'
 import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
 import { Extension } from '@tiptap/core'
@@ -65,8 +66,8 @@ const richBudget = Extension.create({
   }
 })
 
-export const RichEditor: FC = () => {
-  const content = useEditorStore.getState().content
+export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
+  const content = useEditorStore(state => state.content)
   const config = useEditorStore(state => state.config)
   const fontFamilies = { mono: 'ui-monospace, monospace', prose: 'Georgia, serif', sans: 'inherit' }
 
@@ -130,12 +131,23 @@ export const RichEditor: FC = () => {
   })
 
   useEffect(() => {
-    if (!editor) {
+    if (!editor || !active) {
       return
     }
     const publish = (): void => publishEditorHistory(editor.can().undo(), editor.can().redo())
     publish()
     editor.on('transaction', publish)
+    const position = (): void => {
+      let index = -1
+      editor.state.doc.descendants((node, at) => {
+        if (node.type.name === 'heading' && at <= editor.state.selection.from) {
+          index++
+        }
+        return at <= editor.state.selection.from
+      })
+      window.dispatchEvent(new CustomEvent('marka:position', { detail: { index } }))
+    }
+    editor.on('selectionUpdate', position)
     const unsubscribe = subscribeEditorHistory(action => {
       if (action === 'undo') {
         editor.chain().focus().undo().run()
@@ -145,13 +157,14 @@ export const RichEditor: FC = () => {
     })
     return () => {
       editor.off('transaction', publish)
+      editor.off('selectionUpdate', position)
       unsubscribe()
       publishEditorHistory(false, false)
     }
-  }, [editor])
+  }, [editor, active])
 
   useEffect(() => {
-    if (!editor) {
+    if (!editor || !active) {
       return
     }
 
@@ -162,11 +175,11 @@ export const RichEditor: FC = () => {
         editor.commands.setContent(content, { emitUpdate: false })
       }
     }
-  }, [content, editor])
+  }, [content, editor, active])
 
   useEffect(() => {
     const navigate = (event: Event): void => {
-      if (!(event instanceof CustomEvent)) {
+      if (!active || !(event instanceof CustomEvent)) {
         return
       }
       const detail: unknown = event.detail
@@ -185,13 +198,14 @@ export const RichEditor: FC = () => {
     return () => {
       window.removeEventListener('marka:navigate', navigate)
     }
-  }, [editor])
+  }, [editor, active])
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <DocumentToolbar>
         <EditorToolbar editor={editor} />
       </DocumentToolbar>
+      {editor && <RichFind editor={editor} active={active} />}
       <div className="writing-canvas relative flex flex-1 flex-col overflow-y-auto">
         <div
           className={cn(

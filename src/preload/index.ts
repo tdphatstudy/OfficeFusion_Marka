@@ -1,3 +1,4 @@
+import type { BrowserSource, BrowserSession, BrowserPage, BrowserQuery } from '../shared/browser'
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   ConnectedDocument,
@@ -9,6 +10,15 @@ import type {
 import type { OpenedFile, DocumentPage } from '../shared/documents'
 
 const api = {
+  inspectDocument: (target: FileLocation, reload: boolean): Promise<ConnectedDocument> =>
+    ipcRenderer.invoke('document:inspect', target, reload),
+  startBrowser: (source: BrowserSource, auth?: SshCredentials): Promise<BrowserSession | null> =>
+    ipcRenderer.invoke('browser:start', source, auth),
+  listFolder: (id: string, query: BrowserQuery): Promise<BrowserPage> =>
+    ipcRenderer.invoke('browser:list', id, query),
+  openBrowserFile: (id: string, path: string): Promise<ConnectedDocument> =>
+    ipcRenderer.invoke('browser:open', id, path),
+  closeBrowser: (id: string): Promise<void> => ipcRenderer.invoke('browser:close', id),
   connectionCapabilities: (): Promise<ConnectionCapabilities> =>
     ipcRenderer.invoke('connection:capabilities'),
   openConnectedDocument: (

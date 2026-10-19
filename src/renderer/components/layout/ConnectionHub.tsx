@@ -1,4 +1,4 @@
-import { useEffect, useState, type FC, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FC, type FormEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   FolderOpen,
@@ -26,6 +26,9 @@ import {
   type SshCredentials,
   type ConnectionTarget
 } from '../../../shared/connections'
+
+import type { BrowserSession, BrowserSource } from '../../../shared/browser'
+import { FileBrowser } from './FileBrowser'
 
 type ConnectionKind = 'local' | 'wsl' | 'ssh' | 'network' | 'url'
 
@@ -63,6 +66,9 @@ const ConnectionForm: FC = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [path, setPath] = useState('')
+  const paths = useRef<Partial<Record<ConnectionKind, string>>>({})
+  const [browser, setBrowser] = useState<BrowserSession | null>(null)
+  const [guidance, setGuidance] = useState('')
   const [distribution, setDistribution] = useState('')
   const [host, setHost] = useState('')
   const [username, setUsername] = useState('')
@@ -73,12 +79,19 @@ const ConnectionForm: FC = () => {
   const [passphrase, setPassphrase] = useState('')
   const [fingerprint, setFingerprint] = useState('')
   const [profileName, setProfileName] = useState('')
+  const [editingProfile, setEditingProfile] = useState<string | undefined>()
+  const [recentFilter, setRecentFilter] = useState('')
   const busy = useUIStore(state => state.fileBusy)
   const profiles = useConnectionStore(state => state.profiles)
   const recent = useConnectionStore(state => state.recent)
   const currentPath = useEditorStore(state => state.filePath)
   const hint = connectionHints[kind]
-  let actionLabel = kind === 'url' ? 'Import document' : 'Open document'
+  let actionLabel = 'Open document'
+  if (kind === 'url') {
+    actionLabel = 'Import document'
+  } else if (!path.trim()) {
+    actionLabel = kind === 'ssh' ? 'Connect and browse' : 'Browse files'
+  }
   if (busy) {
     actionLabel = 'Opening…'
   }
@@ -107,7 +120,7 @@ const ConnectionForm: FC = () => {
       return parseTarget({
         kind: 'ssh',
         host: host.trim(),
-        path: path.trim(),
+        path: path.trim() || '/',
         username: username.trim() || undefined,
         port: port ? Number(port) : undefined,
         fingerprint: fingerprint.trim() || undefined
@@ -131,12 +144,13 @@ const ConnectionForm: FC = () => {
       setHost(target.host)
       setUsername(target.username ?? '')
       setPort(target.port ? String(target.port) : '')
-      setPath(target.path)
+      setPath(target.path === '/' ? '' : target.path)
       setFingerprint(target.fingerprint ?? '')
       setPassword('')
       setIdentityFile('')
       setPassphrase('')
-      setError('Enter authentication details to reopen this SSH connection.')
+      setError('')
+      setGuidance('Enter authentication details, then connect to browse or reopen this file.')
       return
     }
     setError('')
@@ -151,9 +165,9 @@ const ConnectionForm: FC = () => {
     const opened = keepEdits
       ? await fileActions.reconnectTarget(target, credentials)
       : await fileActions.openTarget(target, credentials)
-    setPassword('')
-    setPassphrase('')
     if (opened) {
+      setPassword('')
+      setPassphrase('')
       useUIStore.getState().setConnectionsOpen(false)
     } else {
       const notice = useUIStore.getState().notice
@@ -163,25 +177,77 @@ const ConnectionForm: FC = () => {
       }
     }
   }
+  const browse = async (source?: BrowserSource): Promise<void> => {
+    setError('')
+    setGuidance('')
+    useUIStore.getState().setFileBusy(true)
+    try {
+      let requested = source
+      if (!requested) {
+        if (kind === 'wsl') {
+          requested = { kind: 'wsl', distribution }
+        } else if (kind === 'ssh') {
+          const target = getTarget()
+          if (target.kind !== 'ssh') {
+            return
+          }
+          requested = target
+        } else {
+          requested = { kind: 'local' }
+        }
+      }
+      let auth: SshCredentials | undefined
+      if (requested.kind === 'ssh') {
+        auth =
+          authMethod === 'password'
+            ? { method: 'password', password }
+            : { method: 'key', keyPath: identityFile, passphrase: passphrase || undefined }
+      }
+      const result = await window.api.startBrowser(requested, auth)
+      if (result) {
+        setBrowser(result)
+        setPassword('')
+        setPassphrase('')
+      }
+    } catch (reason: unknown) {
+      setError(
+        (reason instanceof Error ? reason.message : 'Could not browse this location.').replace(
+          /^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/,
+          ''
+        )
+      )
+    } finally {
+      useUIStore.getState().setFileBusy(false)
+    }
+  }
   const submit = (event: FormEvent): void => {
     event.preventDefault()
     try {
-      void connect(getTarget(), true)
+      if (!path.trim() && kind !== 'url') {
+        void browse()
+      } else {
+        void connect(getTarget(), true)
+      }
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'Check the connection details.')
     }
   }
   const saveProfile = (): void => {
     try {
-      useConnectionStore.getState().saveProfile(profileName, getTarget())
+      useConnectionStore.getState().saveProfile(profileName, getTarget(), editingProfile)
       setProfileName('')
+      setEditingProfile(undefined)
+      setGuidance('Saved connection updated.')
       setError('')
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'Check the connection details.')
     }
   }
   const chooseFile = async (): Promise<void> => {
-    const selected = await window.api.chooseConnectionKey().catch(() => null)
+    const selected = await window.api.chooseConnectionKey().catch((reason: unknown) => {
+      setError(reason instanceof Error ? reason.message : 'Could not open the key picker.')
+      return null
+    })
     if (selected) {
       setIdentityFile(selected)
     }
@@ -195,7 +261,7 @@ const ConnectionForm: FC = () => {
 
   return (
     <>
-      <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
+      <div className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-3 border-b border-border bg-surface px-5 py-3">
         <div className="flex items-center gap-3">
           <div>
             <Dialog.Title className="text-base font-semibold">Open document</Dialog.Title>
@@ -208,369 +274,457 @@ const ConnectionForm: FC = () => {
           <X size={18} />
         </Dialog.Close>
       </div>
-      <div className="connection-layout grid grid-cols-[185px_minmax(0,1fr)]">
-        <div
-          className="border-r border-border bg-surface-raised p-3"
-          role="group"
-          aria-label="Connection methods"
-        >
-          {methods.map(method => (
-            <button
-              key={method.id}
-              type="button"
-              disabled={busy}
-              aria-pressed={kind === method.id}
-              onClick={() => {
-                setKind(method.id)
-                setPassword('')
-                setPassphrase('')
-                setPath('')
-                setError('')
-              }}
-              className={`mb-1 flex w-full items-center gap-2 rounded-sm border-l-2 px-3 py-2 text-left transition-colors disabled:opacity-50 ${kind === method.id ? 'border-accent bg-surface-overlay text-text-primary' : 'border-transparent text-text-secondary hover:bg-surface-overlay'}`}
-            >
-              <method.icon size={17} className="shrink-0" />
-              <span>
-                <span className="block text-xs font-semibold">{method.title}</span>
-                <span className="mt-1 block text-[10px] text-text-muted">{method.subtitle}</span>
-              </span>
-            </button>
-          ))}
-          <button
-            type="button"
-            className="mt-3 flex items-center gap-2 px-3 text-[11px] text-text-muted hover:text-accent"
-            onClick={() => {
-              void refresh()
-            }}
-            disabled={loading || busy}
-          >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-            {loading ? 'Checking…' : 'Refresh availability'}
-          </button>
+      {browser ? (
+        <div className="min-h-0 flex-1">
+          <FileBrowser session={browser} back={() => setBrowser(null)} />
         </div>
-        <div className="min-w-0 p-5">
-          <form onSubmit={submit} className="space-y-4">
-            {kind === 'local' ? (
-              <div className="py-1">
-                <h3 className="text-sm font-semibold">Open from this computer</h3>
-                <p className="mt-2 text-xs leading-relaxed text-text-secondary">
-                  Open Markdown and text files. Mapped network drives and cloud folders synced to
-                  this computer work here too.
-                </p>
-                <button
-                  type="button"
-                  className="primary-action mt-4"
-                  disabled={busy}
-                  onClick={() => {
-                    void fileActions.open().then(() => {
-                      if (!useUIStore.getState().notice?.error) {
-                        useUIStore.getState().setConnectionsOpen(false)
-                      }
-                    })
-                  }}
-                >
-                  <FolderOpen size={15} />
-                  Browse files
-                </button>
-              </div>
-            ) : (
-              <>
-                {kind === 'wsl' && (
-                  <>
-                    <label className="connection-field">
-                      Linux distribution
-                      <select
-                        aria-label="Linux distribution"
-                        value={distribution}
-                        onChange={event => setDistribution(event.target.value)}
-                        disabled={busy || loading}
-                      >
-                        <option value="">
-                          {loading ? 'Looking for WSL…' : 'Choose a distribution'}
-                        </option>
-                        {capabilities?.wslDistributions.map(name => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {capabilities?.platform !== 'win32' && capabilities && (
-                      <p className="connection-help">
-                        WSL is available on Windows. Use This computer to open Linux files on this
-                        device.
-                      </p>
-                    )}
-                    {capabilities?.wslError && (
-                      <p className="connection-help">{capabilities.wslError}</p>
-                    )}
-                  </>
-                )}
-                {kind === 'ssh' && (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
+      ) : (
+        <div className="connection-layout grid min-h-0 flex-1 grid-cols-[185px_minmax(0,1fr)] overflow-auto">
+          <div
+            className="border-r border-border bg-surface-raised p-3"
+            role="group"
+            aria-label="Connection methods"
+          >
+            {methods.map(method => (
+              <button
+                key={method.id}
+                type="button"
+                disabled={busy}
+                aria-pressed={kind === method.id}
+                onClick={() => {
+                  paths.current[kind] = path
+                  setKind(method.id)
+                  setPassword('')
+                  setPassphrase('')
+                  setPath(paths.current[method.id] ?? '')
+                  setError('')
+                  setGuidance('')
+                }}
+                className={`mb-1 flex w-full items-center gap-2 rounded-sm border-l-2 px-3 py-2 text-left transition-colors disabled:opacity-50 ${kind === method.id ? 'border-accent bg-surface-overlay text-text-primary' : 'border-transparent text-text-secondary hover:bg-surface-overlay'}`}
+              >
+                <method.icon size={17} className="shrink-0" />
+                <span>
+                  <span className="block text-xs font-semibold">{method.title}</span>
+                  <span className="mt-1 block text-[10px] text-text-muted">{method.subtitle}</span>
+                </span>
+              </button>
+            ))}
+            <button
+              type="button"
+              className="mt-3 flex items-center gap-2 px-3 text-[11px] text-text-muted hover:text-accent"
+              onClick={() => {
+                void refresh()
+              }}
+              disabled={loading || busy}
+            >
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+              {loading ? 'Checking…' : 'Refresh availability'}
+            </button>
+          </div>
+          <div className="min-w-0 p-5">
+            <form onSubmit={submit} className="space-y-4">
+              {kind === 'local' ? (
+                <div className="py-1">
+                  <h3 className="text-sm font-semibold">Open from this computer</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-text-secondary">
+                    Open Markdown and text files. Mapped network drives and cloud folders synced to
+                    this computer work here too.
+                  </p>
+                  <button
+                    type="button"
+                    className="primary-action mt-4"
+                    disabled={busy}
+                    onClick={() => {
+                      void fileActions.open().then(opened => {
+                        if (opened) {
+                          useUIStore.getState().setConnectionsOpen(false)
+                        }
+                      })
+                    }}
+                  >
+                    <FolderOpen size={15} />
+                    Browse files
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-action ml-2"
+                    disabled={busy}
+                    onClick={() => void browse({ kind: 'local' })}
+                  >
+                    Browse a folder
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {kind === 'wsl' && (
+                    <>
                       <label className="connection-field">
-                        Host
-                        <input
-                          value={host}
-                          onChange={event => setHost(event.target.value)}
-                          placeholder="dev.example.com"
-                          required
-                          disabled={busy}
-                          autoComplete="off"
-                        />
-                      </label>
-                      <label className="connection-field">
-                        Username
-                        <input
-                          value={username}
-                          onChange={event => setUsername(event.target.value)}
-                          placeholder="me"
-                          required
-                          disabled={busy}
-                          autoComplete="off"
-                        />
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3">
-                      <label className="connection-field">
-                        Port
-                        <input
-                          value={port}
-                          onChange={event => setPort(event.target.value)}
-                          type="number"
-                          min="1"
-                          max="65535"
-                          placeholder="22"
-                          disabled={busy}
-                        />
-                      </label>
-                      <label className="connection-field">
-                        Authentication
+                        Linux distribution
                         <select
-                          aria-label="Authentication"
-                          value={authMethod}
-                          onChange={event => {
-                            setAuthMethod(event.target.value === 'key' ? 'key' : 'password')
-                            setPassword('')
-                            setPassphrase('')
-                          }}
-                          disabled={busy}
+                          aria-label="Linux distribution"
+                          value={distribution}
+                          onChange={event => setDistribution(event.target.value)}
+                          disabled={busy || loading}
                         >
-                          <option value="password">Password</option>
-                          <option value="key">SSH key</option>
+                          <option value="">
+                            {loading ? 'Looking for WSL…' : 'Choose a distribution'}
+                          </option>
+                          {capabilities?.wslDistributions.map(name => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
                         </select>
                       </label>
-                    </div>
-                    {authMethod === 'password' ? (
-                      <label className="connection-field">
-                        Password
-                        <input
-                          type="password"
-                          value={password}
-                          onChange={event => setPassword(event.target.value)}
-                          required
-                          disabled={busy}
-                          autoComplete="off"
-                        />
-                      </label>
-                    ) : (
-                      <>
-                        <div className="flex items-end gap-2">
-                          <label className="connection-field min-w-0 flex-1">
-                            Identity file
-                            <input
-                              value={identityFile}
-                              readOnly
-                              placeholder="Choose a private key explicitly"
-                              required
-                              disabled={busy}
-                              autoComplete="off"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="secondary-action"
-                            disabled={busy}
-                            onClick={() => {
-                              void chooseFile()
-                            }}
-                          >
-                            Browse
-                          </button>
-                        </div>
+                      {capabilities?.platform !== 'win32' && capabilities && (
+                        <p className="connection-help">
+                          WSL is available on Windows. Use This computer to open Linux files on this
+                          device.
+                        </p>
+                      )}
+                      {capabilities?.wslError && (
+                        <p className="connection-help">{capabilities.wslError}</p>
+                      )}
+                    </>
+                  )}
+                  {kind === 'ssh' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
                         <label className="connection-field">
-                          Key passphrase (optional)
+                          Host
                           <input
-                            type="password"
-                            value={passphrase}
-                            onChange={event => setPassphrase(event.target.value)}
+                            value={host}
+                            onChange={event => setHost(event.target.value)}
+                            placeholder="dev.example.com"
+                            required
                             disabled={busy}
                             autoComplete="off"
                           />
                         </label>
-                      </>
+                        <label className="connection-field">
+                          Username
+                          <input
+                            value={username}
+                            onChange={event => setUsername(event.target.value)}
+                            placeholder="me"
+                            required
+                            disabled={busy}
+                            autoComplete="off"
+                          />
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3">
+                        <label className="connection-field">
+                          Port
+                          <input
+                            value={port}
+                            onChange={event => setPort(event.target.value)}
+                            type="number"
+                            min="1"
+                            max="65535"
+                            placeholder="22"
+                            disabled={busy}
+                          />
+                        </label>
+                        <label className="connection-field">
+                          Authentication
+                          <select
+                            aria-label="Authentication"
+                            value={authMethod}
+                            onChange={event => {
+                              setAuthMethod(event.target.value === 'key' ? 'key' : 'password')
+                              setPassword('')
+                              setPassphrase('')
+                            }}
+                            disabled={busy}
+                          >
+                            <option value="password">Password</option>
+                            <option value="key">SSH key</option>
+                          </select>
+                        </label>
+                      </div>
+                      {authMethod === 'password' ? (
+                        <label className="connection-field">
+                          Password
+                          <input
+                            type="password"
+                            value={password}
+                            onChange={event => setPassword(event.target.value)}
+                            required
+                            disabled={busy}
+                            autoComplete="off"
+                          />
+                        </label>
+                      ) : (
+                        <>
+                          <div className="flex items-end gap-2">
+                            <label className="connection-field min-w-0 flex-1">
+                              Identity file
+                              <input
+                                value={identityFile}
+                                readOnly
+                                placeholder="Choose a private key explicitly"
+                                required
+                                disabled={busy}
+                                autoComplete="off"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="secondary-action"
+                              disabled={busy}
+                              onClick={() => {
+                                void chooseFile()
+                              }}
+                            >
+                              Browse
+                            </button>
+                          </div>
+                          <label className="connection-field">
+                            Key passphrase (optional)
+                            <input
+                              type="password"
+                              value={passphrase}
+                              onChange={event => setPassphrase(event.target.value)}
+                              disabled={busy}
+                              autoComplete="off"
+                            />
+                          </label>
+                        </>
+                      )}
+                      <label className="connection-field">
+                        Server fingerprint
+                        <input
+                          value={fingerprint}
+                          onChange={event => setFingerprint(event.target.value)}
+                          placeholder="SHA256:..."
+                          required
+                          disabled={busy}
+                          autoComplete="off"
+                        />
+                      </label>
+                      <p className="connection-help">
+                        Ask your server administrator for its SHA256 host fingerprint and verify it
+                        independently. Passwords and passphrases stay in memory for this session, up
+                        to 30 minutes. Keys and SSH agents are never selected automatically.
+                      </p>
+                    </>
+                  )}
+                  {kind !== 'url' && (
+                    <div className="border-b border-border pb-4">
+                      <p className="connection-help mb-2">
+                        Browse folders and select a document. You can also enter a file path below.
+                      </p>
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        disabled={busy || (kind === 'wsl' && !distribution)}
+                        onClick={event => {
+                          const form = event.currentTarget.form
+                          if (kind !== 'ssh' || form?.reportValidity()) {
+                            void browse()
+                          }
+                        }}
+                      >
+                        {kind === 'ssh' ? 'Connect and browse folders' : 'Browse folders'}
+                      </button>
+                    </div>
+                  )}
+                  <label className="connection-field">
+                    {kind === 'url' ? 'Raw Markdown URL' : 'File path'}
+                    <input
+                      value={path}
+                      onChange={event => setPath(event.target.value)}
+                      placeholder={hint.placeholder}
+                      required={kind === 'url'}
+                      disabled={busy}
+                      autoComplete="off"
+                    />
+                  </label>
+                  <p className="connection-help">{hint.help}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="submit"
+                      className="primary-action"
+                      disabled={busy || (kind === 'wsl' && !distribution)}
+                    >
+                      {busy ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <ArrowRight size={15} />
+                      )}
+                      {actionLabel}
+                    </button>
+                    {canReconnect && !busy && (
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={event => {
+                          if (event.currentTarget.form?.reportValidity()) {
+                            void connect(getTarget(), true, true)
+                          }
+                        }}
+                      >
+                        Reconnect &amp; keep edits
+                      </button>
                     )}
-                    <label className="connection-field">
-                      Server fingerprint
-                      <input
-                        value={fingerprint}
-                        onChange={event => setFingerprint(event.target.value)}
-                        placeholder="SHA256:..."
-                        required
-                        disabled={busy}
-                        autoComplete="off"
-                      />
-                    </label>
-                    <p className="connection-help">
-                      Ask your server administrator for its SHA256 host fingerprint and verify it
-                      independently. Passwords and passphrases stay in memory for this session, up
-                      to 30 minutes. Keys and SSH agents are never selected automatically.
-                    </p>
-                  </>
-                )}
-                <label className="connection-field">
-                  {kind === 'url' ? 'Raw Markdown URL' : 'File path'}
-                  <input
-                    value={path}
-                    onChange={event => setPath(event.target.value)}
-                    placeholder={hint.placeholder}
-                    required
-                    disabled={busy}
-                    autoComplete="off"
-                  />
-                </label>
-                <p className="connection-help">{hint.help}</p>
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="submit"
-                    className="primary-action"
-                    disabled={busy || (kind === 'wsl' && !distribution)}
-                  >
-                    {busy ? (
-                      <Loader2 size={15} className="animate-spin" />
-                    ) : (
-                      <ArrowRight size={15} />
+                    {busy && (
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={() => window.api.cancelConnection()}
+                      >
+                        Cancel request
+                      </button>
                     )}
-                    {actionLabel}
-                  </button>
-                  {canReconnect && !busy && (
+                  </div>
+                  <div className="flex gap-2 border-t border-border pt-4">
+                    <input
+                      aria-label="Connection profile name"
+                      value={profileName}
+                      onChange={event => setProfileName(event.target.value)}
+                      className="connection-input min-w-0 flex-1"
+                      placeholder="Profile name (optional)"
+                      disabled={busy}
+                      maxLength={80}
+                    />
                     <button
                       type="button"
                       className="secondary-action"
-                      onClick={event => {
-                        if (event.currentTarget.form?.reportValidity()) {
-                          void connect(getTarget(), true, true)
-                        }
+                      disabled={busy}
+                      onClick={saveProfile}
+                    >
+                      <BookmarkPlus size={14} />
+                      {editingProfile ? 'Update profile' : 'Save profile'}
+                    </button>
+                  </div>
+                </>
+              )}
+              {guidance && (
+                <p role="status" className="connection-help">
+                  {guidance}
+                </p>
+              )}
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-border bg-surface-raised p-3 text-xs leading-relaxed text-text-primary"
+                >
+                  {error}
+                </p>
+              )}
+            </form>
+            {profiles.length > 0 && (
+              <div className="mt-5 border-t border-border pt-4">
+                <h3 className="mb-2 text-xs font-semibold text-text-secondary">
+                  Saved connections
+                </h3>
+                {profiles.map(profile => (
+                  <div key={profile.id} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="min-w-0 flex-1 truncate rounded-md px-2 py-2 text-left text-xs hover:bg-surface-raised"
+                      title={targetLabel(profile.target)}
+                      onClick={() => {
+                        void connect(profile.target)
                       }}
                     >
-                      Reconnect &amp; keep edits
+                      {profile.name}
                     </button>
-                  )}
-                  {busy && (
                     <button
                       type="button"
                       className="secondary-action"
-                      onClick={() => window.api.cancelConnection()}
+                      disabled={busy}
+                      aria-label={`Edit profile ${profile.name}`}
+                      onClick={() => {
+                        setEditingProfile(profile.id)
+                        setProfileName(profile.name)
+                        setError('')
+                        setGuidance('Update this saved connection, then choose Update profile.')
+                        const target = profile.target
+                        if (target.kind === 'ssh') {
+                          setKind('ssh')
+                          setHost(target.host)
+                          setUsername(target.username ?? '')
+                          setPort(target.port ? String(target.port) : '')
+                          setFingerprint(target.fingerprint ?? '')
+                          setPath(target.path === '/' ? '' : target.path)
+                        } else if (target.kind === 'url') {
+                          setKind('url')
+                          setPath(target.url)
+                        } else {
+                          setKind('network')
+                          setPath(target.path)
+                        }
+                        setPassword('')
+                        setPassphrase('')
+                        setIdentityFile('')
+                      }}
                     >
-                      Cancel request
+                      Edit
                     </button>
-                  )}
-                </div>
-                <div className="flex gap-2 border-t border-border pt-4">
-                  <input
-                    aria-label="Connection profile name"
-                    value={profileName}
-                    onChange={event => setProfileName(event.target.value)}
-                    className="connection-input min-w-0 flex-1"
-                    placeholder="Profile name (optional)"
-                    disabled={busy}
-                    maxLength={80}
-                  />
-                  <button
-                    type="button"
-                    className="secondary-action"
-                    disabled={busy}
-                    onClick={saveProfile}
-                  >
-                    <BookmarkPlus size={14} />
-                    Save profile
-                  </button>
-                </div>
-              </>
-            )}
-            {error && (
-              <p
-                role="alert"
-                className="rounded-lg border border-border bg-surface-raised p-3 text-xs leading-relaxed text-text-primary"
-              >
-                {error}
-              </p>
-            )}
-          </form>
-          {profiles.length > 0 && (
-            <div className="mt-5 border-t border-border pt-4">
-              <h3 className="mb-2 text-xs font-semibold text-text-secondary">Saved connections</h3>
-              {profiles.map(profile => (
-                <div key={profile.id} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="min-w-0 flex-1 truncate rounded-md px-2 py-2 text-left text-xs hover:bg-surface-raised"
-                    title={targetLabel(profile.target)}
-                    onClick={() => {
-                      void connect(profile.target)
-                    }}
-                  >
-                    {profile.name}
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    disabled={busy}
-                    aria-label={`Remove profile ${profile.name}`}
-                    onClick={() => useConnectionStore.getState().removeProfile(profile.id)}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {recent.length > 0 && (
-            <div className="mt-5 border-t border-border pt-4">
-              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-text-secondary">
-                <span className="flex items-center gap-1.5">
-                  <Clock size={12} />
-                  Recently opened
-                </span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={useConnectionStore.getState().clearRecent}
-                  className="text-accent"
-                >
-                  Clear
-                </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      disabled={busy}
+                      aria-label={`Remove profile ${profile.name}`}
+                      onClick={() => useConnectionStore.getState().removeProfile(profile.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
               </div>
-              {recent.slice(0, 5).map(item => (
-                <button
-                  key={item.id}
-                  type="button"
+            )}
+            {recent.length > 0 && (
+              <div className="mt-5 border-t border-border pt-4">
+                <div className="mb-2 flex items-center justify-between text-xs font-semibold text-text-secondary">
+                  <span className="flex items-center gap-1.5">
+                    <Clock size={12} />
+                    Recently opened
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={useConnectionStore.getState().clearRecent}
+                    className="text-accent"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <input
+                  aria-label="Search recent files"
+                  className="connection-input mb-2 w-full"
+                  placeholder="Search recent files…"
+                  value={recentFilter}
                   disabled={busy}
-                  className="block w-full truncate rounded-md px-2 py-2 text-left text-xs text-text-secondary hover:bg-surface-raised hover:text-accent"
-                  title={item.name}
-                  onClick={() => {
-                    void connect(item.target)
-                  }}
-                >
-                  {item.name}
-                </button>
-              ))}
-            </div>
-          )}
+                  onChange={event => setRecentFilter(event.target.value)}
+                />
+                {recent
+                  .filter(item => item.name.toLowerCase().includes(recentFilter.toLowerCase()))
+                  .map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={busy}
+                      className="block w-full truncate rounded-md px-2 py-2 text-left text-xs text-text-secondary hover:bg-surface-raised hover:text-accent"
+                      title={item.name}
+                      onClick={() => {
+                        void connect(item.target)
+                      }}
+                    >
+                      <span className="block truncate font-medium text-text-primary">
+                        {item.name.split(/[\\/]/).pop() ?? item.name}
+                      </span>
+                      <span className="block truncate text-[11px]">{item.name}</span>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </>
   )
 }
@@ -589,7 +743,7 @@ export const ConnectionHub: FC = () => {
     >
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content top-[8%] max-w-3xl">
+        <Dialog.Content className="dialog-content top-[5%] flex h-[85vh] max-h-[90vh] max-w-4xl flex-col overflow-hidden">
           <ConnectionForm />
         </Dialog.Content>
       </Dialog.Portal>

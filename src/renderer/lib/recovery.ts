@@ -4,6 +4,7 @@ export interface RecoveryChoice {
   id: string
   name: string
   updatedAt: number
+  location?: string
 }
 
 let database: Promise<IDBDatabase> | null = null
@@ -92,12 +93,18 @@ export async function recoveryChoices(): Promise<RecoveryChoice[]> {
           'name' in value &&
           typeof value.name === 'string' &&
           'updatedAt' in value &&
-          typeof value.updatedAt === 'number'
+          typeof value.updatedAt === 'number' &&
+          Number.isFinite(value.updatedAt) &&
+          Math.abs(value.updatedAt) <= 8_640_000_000_000_000
         ) {
           choices.push({
             id: value.id,
             name: value.name.slice(0, 256),
-            updatedAt: value.updatedAt
+            updatedAt: value.updatedAt,
+            location:
+              'location' in value && typeof value.location === 'string'
+                ? value.location.slice(0, 4096)
+                : undefined
           })
         }
         cursor.continue()
@@ -147,7 +154,8 @@ async function writeRecord(id: string, draft: Draft | null): Promise<void> {
           metadata.put({
             id,
             name: valid.filePath?.split(/[\\/]/).pop() ?? 'Untitled.md',
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
+            location: valid.filePath ?? 'Unsaved local document'
           })
         }
       }

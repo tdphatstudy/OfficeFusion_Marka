@@ -3,7 +3,7 @@ import * as Menu from '@radix-ui/react-dropdown-menu'
 import { PanelLeft, Search, Focus, MoreHorizontal } from 'lucide-react'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
-import { changeViewMode, findInDocument } from '@/lib/commands'
+import { changeViewMode, findInDocument, richModeLimitation } from '@/lib/commands'
 import { cn } from '@/lib/utils'
 import { useCompactLayout } from '@/hooks/useCompactLayout'
 
@@ -19,6 +19,7 @@ const modes = [
 
 export const DocumentToolbar: FC<DocumentToolbarProps> = ({ children }) => {
   const viewMode = useEditorStore(state => state.viewMode)
+  const limitation = useEditorStore(state => richModeLimitation(state.content))
   const fullWidth = useEditorStore(state => state.config.fullWidth)
   const sidebarOpen = useUIStore(state => state.sidebarOpen)
   const compactSidebarOpen = useUIStore(state => state.compactSidebarOpen)
@@ -46,7 +47,8 @@ export const DocumentToolbar: FC<DocumentToolbarProps> = ({ children }) => {
             type="button"
             className={cn('mode-button', viewMode === item.mode && 'mode-button-active')}
             aria-pressed={viewMode === item.mode}
-            title={`${item.label} mode`}
+            title={item.mode === 'rich' && limitation ? limitation : `${item.label} mode`}
+            disabled={item.mode === 'rich' && limitation !== null}
             onClick={() => changeViewMode(item.mode)}
           >
             {item.label}

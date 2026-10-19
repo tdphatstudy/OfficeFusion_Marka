@@ -374,6 +374,16 @@ export class FileAccess {
     return { path, content: result.content }
   }
 
+  async inspect(path: string): Promise<OpenedFile> {
+    const epoch = this.epoch
+    if (!this.grants.has(path)) {
+      throw new Error('File access expired. Open the file again or Save As a copy.')
+    }
+    const result = await readEditable(path)
+    this.assertGeneration(epoch)
+    return { path, content: result.content }
+  }
+
   async save(path: string, content: string, expectedContent?: string): Promise<void> {
     const epoch = this.epoch
     checkedContent(content)

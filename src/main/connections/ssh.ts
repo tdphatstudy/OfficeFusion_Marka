@@ -4,6 +4,7 @@ import ssh2, { type ConnectConfig } from 'ssh2'
 import { decodeDocument } from './document'
 import type { SshCredentials, SshLocation } from '../../shared/connections'
 import { readEditable } from '../files'
+import type { BrowserEntry } from '../../shared/browser'
 
 export function quoteRemotePath(path: string): string {
   const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`
@@ -162,6 +163,45 @@ export async function readSshFile(
   return decodeDocument(
     await execute(target, `cat -- ${quoteRemotePath(target.path)}`, credentials, signal)
   )
+}
+
+export async function readSshDirectory(
+  target: SshLocation,
+  credentials: SshCredentials,
+  signal: AbortSignal
+): Promise<{ entries: BrowserEntry[]; truncated: boolean }> {
+  const output = await execute(
+    target,
+    `p=${quoteRemotePath(target.path)}; [ -d "$p" ] && [ -r "$p" ] && [ -x "$p" ] || { printf 'Cannot browse this directory.' >&2; exit 74; }; find -- "$p" -mindepth 1 -maxdepth 1 \\( -type f -o -type d \\) -printf '%y\\0%f\\0' | head -z -n 20002`,
+    credentials,
+    signal
+  )
+  const fields = new TextDecoder('utf-8', { fatal: true }).decode(output).split('\0')
+  const entries: BrowserEntry[] = []
+  for (let index = 0; index + 1 < fields.length && entries.length < 10000; index += 2) {
+    const name = fields[index + 1]
+    if (!name || /[/\x00-\x1f\x7f]/.test(name) || !['d', 'f'].includes(fields[index] ?? '')) {
+      continue
+    }
+    entries.push({
+      name,
+      path: `${target.path === '/' ? '' : target.path}/${name}`,
+      directory: fields[index] === 'd'
+    })
+  }
+  return { entries, truncated: fields.length > 20001 }
+}
+
+export async function readSshHome(
+  target: SshLocation,
+  credentials: SshCredentials,
+  signal: AbortSignal
+): Promise<string> {
+  const home = (await execute(target, 'printf %s "$HOME"', credentials, signal)).toString('utf8')
+  if (!home.startsWith('/') || home.length > 4096 || /[\x00-\x1f\x7f]/.test(home)) {
+    throw new Error('The server did not return a valid home directory.')
+  }
+  return home
 }
 
 export async function writeSshFile(

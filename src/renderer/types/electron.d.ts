@@ -1,3 +1,4 @@
+import type { BrowserSource, BrowserSession, BrowserPage, BrowserQuery } from '../../shared/browser'
 import type {
   ConnectedDocument,
   ConnectionCapabilities,
@@ -8,6 +9,11 @@ import type {
 import type { OpenedFile, DocumentPage } from '../../shared/documents'
 
 export interface ElectronAPI {
+  inspectDocument: (target: FileLocation, reload: boolean) => Promise<ConnectedDocument>
+  startBrowser: (source: BrowserSource, auth?: SshCredentials) => Promise<BrowserSession | null>
+  listFolder: (id: string, query: BrowserQuery) => Promise<BrowserPage>
+  openBrowserFile: (id: string, path: string) => Promise<ConnectedDocument>
+  closeBrowser: (id: string) => Promise<void>
   connectionCapabilities: () => Promise<ConnectionCapabilities>
   openConnectedDocument: (
     target: ConnectionTarget,

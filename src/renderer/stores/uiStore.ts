@@ -15,6 +15,7 @@ interface UIState {
   focusMode: boolean
   fileBusy: boolean
   findRequested: boolean
+  conflictDocumentId: number | null
   notice: { message: string; error: boolean } | null
 
   setTheme: (theme: Theme) => void
@@ -43,6 +44,7 @@ export const useUIStore = create<UIState>()(
       focusMode: false,
       fileBusy: false,
       findRequested: false,
+      conflictDocumentId: null,
       notice: null,
 
       setTheme: theme => set({ theme }),

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { isAbsolute } from 'node:path'
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
-import { parseTarget, targetLabel, type SshCredentials } from '../../shared/connections'
+import { parseTarget, targetLabel, wslPath, type SshCredentials } from '../../shared/connections'
+import { FileBrowser, checkedBrowserQuery, wslHome } from '../browser'
 import { checkedContent, exportCharacters } from '../../shared/documents'
 import {
   connectionCapabilities,
@@ -56,6 +57,26 @@ export function registerIpcHandlers(): void {
   const credentials = new Map<number, Map<string, { value: SshCredentials; expires: number }>>()
   const keyGrants = new Map<number, Set<string>>()
   const connections = new Map<number, AbortController>()
+  const browsers = new Map<number, FileBrowser>()
+  const browserTimers = new Map<number, ReturnType<typeof setTimeout>>()
+  const clearBrowser = (owner: number): void => {
+    clearTimeout(browserTimers.get(owner))
+    browserTimers.delete(owner)
+    browsers.delete(owner)
+  }
+  const expireBrowser = (owner: number, id: string, expires: number): void => {
+    browserTimers.set(
+      owner,
+      setTimeout(
+        () => {
+          if (browsers.get(owner)?.session.id === id) {
+            clearBrowser(owner)
+          }
+        },
+        Math.max(0, expires - Date.now())
+      ).unref()
+    )
+  }
   const pending = new Map<number, number>()
   const exports = new Set<number>()
   const requests = new WeakMap<
@@ -80,6 +101,7 @@ export function registerIpcHandlers(): void {
         credentials.get(owner)?.clear()
         keyGrants.delete(owner)
         connections.get(owner)?.abort()
+        clearBrowser(owner)
       }
       event.sender.once('destroyed', () => {
         cleanup()
@@ -151,6 +173,126 @@ export function registerIpcHandlers(): void {
     }
   }
   handle('connection:capabilities', () => connectionCapabilities())
+  const rememberCredentials = (owner: number, target: unknown, auth: SshCredentials): void => {
+    const session = credentials.get(owner) ?? new Map()
+    if (session.size >= 8) {
+      session.clear()
+    }
+    const expires = Date.now() + 30 * 60_000
+    const destination = key(target)
+    session.set(destination, { value: auth, expires })
+    credentials.set(owner, session)
+    setTimeout(() => {
+      if (session.get(destination)?.expires === expires) {
+        session.delete(destination)
+      }
+    }, 30 * 60_000).unref()
+  }
+  const browser = (event: Electron.IpcMainInvokeEvent, id: unknown): FileBrowser => {
+    const value = browsers.get(event.sender.id)
+    if (!value || value.session.id !== id || value.expires < Date.now()) {
+      clearBrowser(event.sender.id)
+      throw new Error('Folder session expired. Connect again to continue.')
+    }
+    return value
+  }
+  handle('browser:start', (event, source, rawAuth) =>
+    withConnection(event, async signal => {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (!window || !source || typeof source !== 'object' || !('kind' in source)) {
+        throw new Error('Choose a file source.')
+      }
+      let value: FileBrowser
+      if (source.kind === 'local') {
+        const result = await dialog.showOpenDialog(window, {
+          title: 'Choose a folder to browse',
+          properties: ['openDirectory']
+        })
+        if (result.canceled || !result.filePaths[0]) {
+          return null
+        }
+        value = await FileBrowser.local(result.filePaths[0])
+      } else if (
+        source.kind === 'wsl' &&
+        'distribution' in source &&
+        typeof source.distribution === 'string'
+      ) {
+        if (process.platform !== 'win32') {
+          throw new Error('WSL browsing is available on Windows.')
+        }
+        const root = wslPath(source.distribution, '/')
+        const result = await dialog.showMessageBox(window, {
+          type: 'question',
+          title: 'Browse WSL files',
+          message: `Allow browsing ${source.distribution}?`,
+          detail:
+            'Browse folders and choose a document to open. Your current document stays open until you select another file.',
+          buttons: ['Cancel', 'Browse'],
+          cancelId: 0,
+          defaultId: 1
+        })
+        if (result.response !== 1) {
+          return null
+        }
+        const home = await wslHome(source.distribution, signal)
+        value = await FileBrowser.local(
+          root,
+          wslPath(source.distribution, home),
+          `WSL · ${source.distribution}`
+        )
+      } else {
+        const target = parseTarget(source)
+        const auth = parseAuth(rawAuth)
+        if (target.kind !== 'ssh' || !auth) {
+          throw new Error('Enter SSH authentication to browse.')
+        }
+        if (auth.method === 'key' && !keyGrants.get(event.sender.id)?.has(auth.keyPath)) {
+          throw new Error('Choose this private key through the file picker first.')
+        }
+        value = await FileBrowser.remote(target, auth, signal)
+      }
+      signal.throwIfAborted()
+      assertCurrent(event)
+      clearBrowser(event.sender.id)
+      browsers.set(event.sender.id, value)
+      expireBrowser(event.sender.id, value.session.id, value.expires)
+      return value.session
+    })
+  )
+  handle('browser:list', (event, id, query) =>
+    withConnection(event, signal => browser(event, id).list(checkedBrowserQuery(query), signal))
+  )
+  handle('browser:open', (event, id, rawPath) =>
+    withConnection(event, async signal => {
+      if (typeof rawPath !== 'string') {
+        throw new Error('Choose a file.')
+      }
+      const value = browser(event, id)
+      const path = await value.checkedPath(rawPath)
+      if (value.ssh) {
+        const target = { ...value.ssh.target, path }
+        const result = await openConnectedDocument(target, signal, value.ssh.credentials)
+        signal.throwIfAborted()
+        assertCurrent(event)
+        rememberCredentials(event.sender.id, target, value.ssh.credentials)
+        return result
+      }
+      signal.throwIfAborted()
+      const result = await access(event).open(path)
+      signal.throwIfAborted()
+      return {
+        ...result,
+        location: { kind: 'local', path },
+        name: path.split(/[\\/]/).pop() ?? 'Document.md'
+      }
+    })
+  )
+  handle('browser:close', (event, id) => {
+    if (browsers.get(event.sender.id)?.session.id === id) {
+      connections.get(event.sender.id)?.abort()
+      clearBrowser(event.sender.id)
+    }
+  })
   handle('connection:open', (event, rawTarget, rawAuth) =>
     withConnection(event, async signal => {
       const target = parseTarget(rawTarget)
@@ -188,23 +330,7 @@ export function registerIpcHandlers(): void {
       const result = await openConnectedDocument(target, signal, auth)
       signal.throwIfAborted()
       if (result.location?.kind === 'ssh' && auth) {
-        let session = credentials.get(event.sender.id)
-        if (!session) {
-          session = new Map()
-          credentials.set(event.sender.id, session)
-        }
-        if (session.size >= 8) {
-          session.clear()
-        }
-        const expires = Date.now() + 30 * 60_000
-        const destination = key(result.location)
-        session.set(destination, { value: auth, expires })
-        const ownerSession = session
-        setTimeout(() => {
-          if (ownerSession.get(destination)?.expires === expires) {
-            ownerSession.delete(destination)
-          }
-        }, 30 * 60_000).unref()
+        rememberCredentials(event.sender.id, result.location, auth)
       }
       return result
     })
@@ -287,6 +413,32 @@ export function registerIpcHandlers(): void {
     return result.canceled || !result.filePaths[0] ? null : access(event).open(result.filePaths[0])
   })
   handle('document:refresh', (event, path) => access(event).refresh(checkedPath(path)))
+  handle('document:inspect', (event, rawTarget, reload) =>
+    withConnection(event, async signal => {
+      if (typeof reload !== 'boolean') {
+        throw new Error('Invalid comparison request.')
+      }
+      const target = parseTarget(rawTarget)
+      if (target.kind === 'url') {
+        throw new Error('Choose an opened document.')
+      }
+      if (target.kind === 'local') {
+        const result = reload
+          ? await access(event).refresh(checkedPath(target.path))
+          : await access(event).inspect(checkedPath(target.path))
+        return {
+          ...result,
+          location: target,
+          name: target.path.split(/[\\/]/).pop() ?? 'Document.md'
+        }
+      }
+      const auth = credentials.get(event.sender.id)?.get(key(target))
+      if (!auth || auth.expires < Date.now()) {
+        throw new Error('SSH session expired. Reconnect or save a local copy.')
+      }
+      return openConnectedDocument(target, signal, auth.value)
+    })
+  )
   handle('document:page', (event, handle, offset) => {
     if (typeof handle !== 'string' || typeof offset !== 'number') {
       throw new Error('Invalid page request.')

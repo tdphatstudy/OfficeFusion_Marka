@@ -403,7 +403,8 @@ select:focus-visible,
 }
 
 @media (max-width: 900px) {
-  .editor-workspace[data-mode='split'] {
+  .editor-workspace[data-mode='split'],
+  .source-workspace[data-mode='split'] {
     flex-direction: column;
   }
   .editor-workspace[data-mode='split'] .source-pane {
@@ -412,7 +413,7 @@ select:focus-visible,
   .split-divider {
     display: none;
   }
-  .editor-workspace[data-mode='split'] > section {
+  .source-workspace[data-mode='split'] > section {
     border-top: 1px solid hsl(var(--color-border));
   }
 }

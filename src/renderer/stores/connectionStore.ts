@@ -13,7 +13,7 @@ interface ConnectionState {
   recent: SavedSource[]
   profiles: SavedSource[]
   remember: (target: ConnectionTarget) => void
-  saveProfile: (name: string, target: ConnectionTarget) => void
+  saveProfile: (name: string, target: ConnectionTarget, id?: string) => void
   removeProfile: (id: string) => void
   clearRecent: () => void
 }
@@ -67,7 +67,7 @@ export const useConnectionStore = create<ConnectionState>()(
             ].slice(0, 12)
           }
         }),
-      saveProfile: (name, target) =>
+      saveProfile: (name, target, id) =>
         set(state => {
           const normalized = parseTarget(target)
           if (normalized.kind === 'url' && new URL(normalized.url).search) {
@@ -76,9 +76,22 @@ export const useConnectionStore = create<ConnectionState>()(
             )
           }
           const label = name.trim().slice(0, 80) || targetLabel(normalized).slice(0, 80)
-          const profile = { id: crypto.randomUUID(), name: label, target: normalized }
+          if (id && !state.profiles.some(item => item.id === id)) {
+            throw new Error('This saved connection no longer exists. Save it as a new connection.')
+          }
+          if (state.profiles.some(item => item.name === label && item.id !== id)) {
+            throw new Error(
+              'A saved connection already uses this name. Choose another name or edit that connection.'
+            )
+          }
+          const profile = { id: id ?? crypto.randomUUID(), name: label, target: normalized }
+          if (!id && state.profiles.length >= 8) {
+            throw new Error(
+              'You have 8 saved connections. Edit or remove one before adding another.'
+            )
+          }
           return {
-            profiles: [profile, ...state.profiles.filter(item => item.name !== label)].slice(0, 8)
+            profiles: [profile, ...state.profiles.filter(item => item.id !== id)].slice(0, 8)
           }
         }),
       removeProfile: id =>

@@ -14,6 +14,7 @@ import { DocumentToolbar } from '@/components/layout/DocumentToolbar'
 import { useCompactLayout } from '@/hooks/useCompactLayout'
 import { useRecoveryStartup } from '@/hooks/useRecoveryStartup'
 import { RecoveryDialog } from '@/components/layout/RecoveryDialog'
+import { ConflictDialog } from '@/components/layout/ConflictDialog'
 import { fileActions } from '@/lib/fileActions'
 
 const RichEditor = lazy(() =>
@@ -49,6 +50,16 @@ const EditorWorkspace: FC = () => {
     }
   }, [limitation])
 
+  const [richUsed, setRichUsed] = useState(effectiveMode === 'rich')
+  const [sourceUsed, setSourceUsed] = useState(effectiveMode !== 'rich')
+  const richAllowed = useEditorStore(state => richModeLimitation(state.content) === null)
+  useEffect(() => {
+    if (effectiveMode === 'rich') {
+      setRichUsed(true)
+    } else {
+      setSourceUsed(true)
+    }
+  }, [effectiveMode])
   const split = effectiveMode === 'split'
   if (paged) {
     return (
@@ -75,65 +86,77 @@ const EditorWorkspace: FC = () => {
             </div>
           }
         >
-          {effectiveMode === 'rich' ? (
-            <RichEditor key={documentId} />
-          ) : (
-            <>
-              <div
-                className="source-pane flex min-h-0 min-w-0 flex-col overflow-hidden"
-                style={{ flexBasis: split ? `${ratio}%` : '100%' }}
-              >
-                <SourceEditor />
-              </div>
-              {split && (
-                <>
-                  <div
-                    role="separator"
-                    tabIndex={0}
-                    aria-label="Resize source and preview"
-                    aria-orientation="vertical"
-                    aria-valuemin={25}
-                    aria-valuemax={75}
-                    aria-valuenow={ratio}
-                    className="split-divider"
-                    onKeyDown={event => {
-                      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                        event.preventDefault()
-                        setRatio(current =>
-                          Math.max(
-                            25,
-                            Math.min(75, current + (event.key === 'ArrowRight' ? 5 : -5))
+          <div className={effectiveMode === 'rich' ? 'flex min-h-0 min-w-0 flex-1' : 'hidden'}>
+            {richUsed && richAllowed && (
+              <RichEditor key={documentId} active={effectiveMode === 'rich'} />
+            )}
+          </div>
+          <div
+            className={
+              effectiveMode !== 'rich'
+                ? 'source-workspace flex min-h-0 min-w-0 flex-1'
+                : 'source-workspace hidden'
+            }
+            data-mode={effectiveMode}
+          >
+            {sourceUsed && (
+              <>
+                <div
+                  className="source-pane flex min-h-0 min-w-0 flex-col overflow-hidden"
+                  style={{ flexBasis: split ? `${ratio}%` : '100%' }}
+                >
+                  <SourceEditor active={effectiveMode !== 'rich'} />
+                </div>
+                {split && (
+                  <>
+                    <div
+                      role="separator"
+                      tabIndex={0}
+                      aria-label="Resize source and preview"
+                      aria-orientation="vertical"
+                      aria-valuemin={25}
+                      aria-valuemax={75}
+                      aria-valuenow={ratio}
+                      className="split-divider"
+                      onKeyDown={event => {
+                        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                          event.preventDefault()
+                          setRatio(current =>
+                            Math.max(
+                              25,
+                              Math.min(75, current + (event.key === 'ArrowRight' ? 5 : -5))
+                            )
                           )
-                        )
-                      }
-                    }}
-                    onDoubleClick={() => setRatio(50)}
-                    onPointerDown={event => {
-                      event.currentTarget.setPointerCapture(event.pointerId)
-                    }}
-                    onPointerMove={event => {
-                      if (
-                        event.currentTarget.hasPointerCapture(event.pointerId) &&
-                        workspace.current
-                      ) {
-                        const bounds = workspace.current.getBoundingClientRect()
-                        setRatio(
-                          Math.max(
-                            25,
-                            Math.min(75, ((event.clientX - bounds.left) / bounds.width) * 100)
+                        }
+                      }}
+                      onDoubleClick={() => setRatio(50)}
+                      onPointerDown={event => {
+                        event.currentTarget.setPointerCapture(event.pointerId)
+                      }}
+                      onPointerMove={event => {
+                        if (
+                          event.currentTarget.hasPointerCapture(event.pointerId) &&
+                          workspace.current
+                        ) {
+                          const bounds = workspace.current.getBoundingClientRect()
+                          setRatio(
+                            Math.max(
+                              25,
+                              Math.min(75, ((event.clientX - bounds.left) / bounds.width) * 100)
+                            )
                           )
-                        )
-                      }
-                    }}
-                    onPointerUp={event => {
-                      event.currentTarget.releasePointerCapture(event.pointerId)
-                    }}
-                  />
-                  <MarkdownPreview key={documentId} />
-                </>
-              )}
-            </>
-          )}
+                        }
+                      }}
+                      onPointerUp={event => {
+                        event.currentTarget.releasePointerCapture(event.pointerId)
+                      }}
+                    />
+                    <MarkdownPreview key={documentId} />
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </Suspense>
       </div>
     </div>
@@ -181,6 +204,7 @@ const App: FC = () => {
   const compact = useCompactLayout()
   const recovery = useRecoveryStartup()
   const paged = useEditorStore(state => state.pagedDocument)
+  const documentId = useEditorStore(state => state.documentId)
   if (!recovery.ready) {
     return (
       <div role="status" className="p-6">
@@ -203,7 +227,7 @@ const App: FC = () => {
             aria-label="Document editor"
             className="flex min-w-0 flex-1 flex-col overflow-hidden"
           >
-            <EditorWorkspace />
+            <EditorWorkspace key={documentId} />
           </main>
         </div>
         <StatusBar />
@@ -216,6 +240,7 @@ const App: FC = () => {
           discard={recovery.discard}
           dismiss={recovery.dismiss}
         />
+        <ConflictDialog />
         <Notifications />
       </div>
     </TooltipProvider>

@@ -4,24 +4,31 @@ A desktop writing space built with Electron, React and TypeScript.
 
 ## Features
 
-- Write mode with tables, task lists, formatting and slash commands.
+- Write mode with tables, task lists, formatting, slash commands and in-place find/replace.
+  Supported mode changes retain editor instances and Undo history within the current document.
 - CodeMirror Markdown editing with highlighting, undo/redo, line numbers, word wrap, configurable
   indentation, and find/replace.
 - Resizable Split view with Markdown and preview, stacked at smaller window widths.
 - Sanitized Markdown preview with GFM tables, task lists, footnotes, syntax highlighting and KaTeX.
   Preview parsing runs in a worker, independently of typing.
-- Document outline with correct source navigation, including setext and H1–H6 headings.
+- Document outline with correct source navigation and active-section indication, including setext
+  and H1–H6 headings. Split preview can optionally follow source positions.
 - New, Open, Save and Save As with unsaved-change protection and visible error feedback.
 - Session-isolated IndexedDB draft recovery, including empty edits. Checkpoints run after 600 ms
   idle or at most 5 seconds during continuous typing; normal close awaits a checkpoint.
 - Local Save checks the opened revision and stages/fsyncs replacement bytes. External changes keep
-  your draft dirty. Windows staged replacements preserve Owner/Group/DACL.
+  your draft dirty and offer read-only comparison, Save a copy and explicit reload. Windows staged
+  replacements preserve Owner/Group/DACL. Recovery includes draft previews, locations/timestamps and
+  confirmation before discard.
 - Read-only range viewer for UTF-8 local/WSL/mounted files above 5 MiB, with 64 KiB pages and byte
-  navigation up to 10 GiB. Editable documents stay within a 5 MiB UTF-8 budget.
+  navigation up to 10 GiB. Case-sensitive search scans at most 8 MiB per action, with continuation
+  and cancellation, preserving matches across chunk/action boundaries. Editable documents stay
+  within a 5 MiB UTF-8 budget.
 - Searchable command palette, meeting notes and project brief templates.
 - Light/dark/system appearance with a quick theme switch, writing preferences and focus mode.
 - Connection Hub for local files, Windows WSL distributions, SSH Linux hosts, network paths and raw
-  Markdown URLs, with saved profiles and recent documents.
+  Markdown URLs, with editable saved profiles and searchable recent documents. WSL and SSH connect
+  to a folder browser with breadcrumbs, name/Markdown filters and bounded listing pages.
 - A writing-nib brand mark with Light/Dark variants and matching desktop icons.
 - Document-focused titlebar, File/Edit/View menus, contextual formatting and a compact outline.
 - Bounded HTML, PDF and plain-text export from editing modes; parsing runs in a worker and PDF
@@ -57,6 +64,7 @@ pnpm test
 pnpm build
 pnpm test:smoke
 pnpm test:connections
+pnpm test:ux
 pnpm test:security
 node scripts/benchmark-editor.mjs
 ```

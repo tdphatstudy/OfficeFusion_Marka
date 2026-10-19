@@ -365,7 +365,7 @@ test('preview supports GFM, footnotes, math and source positions', () => {
   )
   assert.match(html, /data-source-line="1"/)
   assert.match(html, /type="checkbox"/)
-  assert.match(html, /<table>/)
+  assert.match(html, /<table(?:\s[^>]*)?>/)
   assert.match(html, /class="katex"/)
   assert.match(html, /Footnote/)
 })
@@ -560,4 +560,24 @@ test('recent documents deduplicate and query-bearing URL credentials are not per
       .getState()
       .saveProfile('Private URL', { kind: 'url', url: 'https://example.com/file?token=secret' })
   )
+})
+
+test('saved connections edit explicitly and never silently replace duplicate or overflow entries', async () => {
+  const { useConnectionStore } = await import('@/stores/connectionStore')
+  useConnectionStore.setState({ profiles: [] })
+  const state = useConnectionStore.getState()
+  const target = { kind: 'local' as const, path: '/notes.md' }
+  state.saveProfile('Work', target)
+  const original = useConnectionStore.getState().profiles[0]
+  assert.ok(original)
+  assert.throws(() => state.saveProfile('Work', { ...target, path: '/other.md' }), /already uses/)
+  assert.deepEqual(useConnectionStore.getState().profiles[0]?.target, target)
+  state.saveProfile('Updated work', { ...target, path: '/other.md' }, original.id)
+  assert.equal(useConnectionStore.getState().profiles[0]?.id, original.id)
+  assert.equal(useConnectionStore.getState().profiles[0]?.name, 'Updated work')
+  for (let index = 0; index < 7; index++) state.saveProfile(`Place ${index}`, target)
+  assert.throws(() => state.saveProfile('Ninth place', target), /8 saved/)
+  assert.throws(() => state.saveProfile('Missing edit', target, 'missing-id'), /no longer exists/)
+  assert.equal(useConnectionStore.getState().profiles.length, 8)
+  useConnectionStore.setState({ profiles: [] })
 })

@@ -36,11 +36,7 @@ export function changeViewMode(mode: ViewMode): void {
 
 export function findInDocument(): void {
   flushEditor()
-  const state = useEditorStore.getState()
   useUIStore.getState().setFindRequested(true)
-  if (state.viewMode === 'rich') {
-    state.setViewMode('source')
-  }
   useUIStore.getState().setCommandOpen(false)
 }
 
@@ -54,7 +50,7 @@ export interface AppCommand {
   label: string
   group: string
   shortcut?: string
-  run: () => void | Promise<void>
+  run: () => unknown
 }
 
 export const appCommands: AppCommand[] = [

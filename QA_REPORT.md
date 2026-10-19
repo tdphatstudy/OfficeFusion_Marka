@@ -1,5 +1,55 @@
 # Marka — Kết quả kiểm chứng đợt nâng cấp UX
 
+## Đợt browser và document workflows — 19/10/2026
+
+Môi trường: Windows, Node 20.19.5, pnpm 9, Electron 44.9.0. Các kết quả bên dưới thuộc production
+build hiện tại, chạy bằng profile thử nghiệm riêng. Phần lịch sử phía sau giữ nguyên ngày/môi trường
+của từng đợt cũ.
+
+| Gate                                                               | Kết quả |
+| ------------------------------------------------------------------ | ------- |
+| TypeScript renderer và main/preload, ESLint, production build      | Pass    |
+| Regression (`pnpm test`)                                           | 94/94   |
+| Editor Electron (`pnpm test:smoke`)                                | 27/27   |
+| Connections (`MARKA_TEST_WSL_DISTRO=Ubuntu pnpm test:connections`) | 19/19   |
+| Security Electron (`pnpm test:security`)                           | 15/15   |
+| UX workflows (`MARKA_TEST_WSL_DISTRO=Ubuntu pnpm test:ux`)         | 11/11   |
+
+Browser WSL/SSH không yêu cầu biết file path; có Home/Back/Forward/Up, breadcrumb, filter tên trong
+folder hiện tại, Markdown/all files, hidden files và tối đa 200 kết quả mỗi trang. Main cấp quyền
+theo window, canonical root và session có hạn. Test có 10.001 file, pagination, Unicode, root
+traversal/symlink escape, cancellation, SSH fingerprint mismatch trước auth, key chỉ được dùng sau
+native picker, close/reload thu hồi quyền. SSH chỉ chạy localhost server mock; WSL chỉ mở/sửa file
+fixture sinh trong `/tmp`. Không dùng SSH key/agent/config hoặc SSH host cá nhân.
+
+Find/Replace trong Write giữ nguyên mode; tìm kiếm và mode roundtrip giữ khả năng Undo. Chỉ editor
+đang active đồng bộ nội dung, tránh parse lại bản Markdown ẩn theo từng phím gõ. Rich không phù hợp
+ngân sách/cú pháp được giải phóng và Write bị giới hạn rõ ràng. Split vẫn stack dọc ở cửa sổ
+800×600; có Follow source theo source block và active section trong outline.
+
+Conflict có read-only comparison, Save a copy và Reload với quyết định unsaved rõ ràng. Test xác
+nhận Compare không đổi revision grant để cho phép overwrite. Recovery phân biệt draft trùng tên bằng
+location/time, preview có giới hạn và xác nhận Discard. Các modal mới chặn lệnh editor phía sau;
+regression đã được cập nhật để tiếp tục qua Keep editing.
+
+Large viewer tìm case-sensitive bằng 64 KiB ranges, tối đa 8 MiB mỗi lượt, có cancel/continue và giữ
+overlap qua cả ranh giới UTF-8 lẫn ranh giới lượt tìm. Test dùng file thật trên 6 MiB và range
+reader giả lập 10 GiB; chưa phải benchmark native với file vật lý 10 GiB. Source 10.000 dòng mở
+trong 167 ms ở lượt smoke này và vẫn giới hạn DOM dưới 500 dòng; số đo máy hiện tại không phải SLA.
+
+Đã xem screenshot browser light, SSH browser 800×600 và screenshot editor light/dark từ smoke. Không
+có renderer/main exception ở các gate hoàn tất. Artifact nằm trong `tmp/ux-smoke`,
+`tmp/electron-smoke`, `tmp/connection-smoke`, `tmp/security-smoke`; không commit/đóng gói fixture.
+
+Các giới hạn còn lại: browser filter chỉ trong folder hiện tại; chưa có recursive workspace index,
+file watcher, tabs/workspace tree hay tự merge conflict. Scan folder giới hạn 10.000 entries và hiển
+thị rõ khi bị cắt. Comparison chỉ hiển thị 128 Ki ký tự mỗi bản; draft preview 32 Ki; rich search
+hiển thị tối đa 500 match và yêu cầu thu hẹp để Replace all. History giữ theo engine trong phiên
+document, không phải một lịch sử collaborative xuyên mọi trình biên tập. Đợt này chưa tạo installer
+hay chạy lại ASAR packaging; các kết quả package ở lịch sử không chứng nhận bundle mới.
+
+## Lịch sử kiểm chứng
+
 Ngày: 15/10/2026. Môi trường: Windows, Node 20.19.5, pnpm 9, Electron 33.4.11.
 
 ## Các lớp kiểm tra

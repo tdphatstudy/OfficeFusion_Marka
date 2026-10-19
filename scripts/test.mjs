@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { build } from 'vite'
 
-for (const name of ['core', 'connections', 'files', 'recovery']) {
+const suites = ['core', 'connections', 'files', 'recovery', 'ux']
+for (const name of suites) {
   await build({
     configFile: false,
     logLevel: 'warn',
@@ -24,7 +25,7 @@ const result = spawnSync(
   process.execPath,
   [
     '--test',
-    ...['core', 'connections', 'files', 'recovery'].map(name => resolve(`tmp/tests/${name}.test.mjs`))
+    ...suites.map(name => resolve(`tmp/tests/${name}.test.mjs`))
   ],
   {
     stdio: 'inherit'

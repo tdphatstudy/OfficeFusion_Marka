@@ -27,7 +27,10 @@ const StatusBar: FC = () => {
   if (paged) {
     statistics = `${(paged.size / 1024 / 1024).toFixed(1)} MiB`
   }
-  let saveStatus = filePath ? '✓ Saved' : 'Local document'
+  let saveStatus = filePath ? '✓ Saved locally' : 'Local document'
+  if (location?.kind === 'ssh') {
+    saveStatus = '✓ Saved to host'
+  }
   if (isDirty) {
     saveStatus = '● Unsaved changes'
   }
@@ -68,6 +71,9 @@ const StatusBar: FC = () => {
         </button>
       )}
 
+      {filePath?.startsWith('\\\\wsl.localhost\\') && (
+        <span className="shrink-0 font-medium text-accent">WSL · {filePath.split('\\')[3]}</span>
+      )}
       {filePath ? (
         <span className="min-w-0 flex-1 truncate pl-2" title={filePath}>
           {filePath}

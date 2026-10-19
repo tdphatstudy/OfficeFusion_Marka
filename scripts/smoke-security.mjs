@@ -130,7 +130,7 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.cm-content')?.textContent?.includes('data:image/png')
   )
-  await page.getByRole('button', { name: 'Write', exact: true }).click()
+  assert.equal(await page.getByRole('button', { name: 'Write', exact: true }).isDisabled(), true)
   assert.equal(await page.locator('.tiptap').count(), 0)
   await source().press('Control+End')
   await page.keyboard.type(' preserved')
@@ -235,11 +235,11 @@ try {
   await writeFile(fixture, '# External edit')
   await page.keyboard.press('Control+s')
   await page.getByText(/File changed on disk/).waitFor()
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click()
   assert.equal(await readFile(fixture, 'utf8'), '# External edit')
   assert.match(await source().innerText(), /My dirty edits/)
   await waitForDraft(page, '# My dirty edits')
   passed('External writers trigger a conflict while dirty text and its recovery checkpoint survive')
-
   await picker(invalid)
   await page.keyboard.press('Control+o')
   await page.getByText(/Choose a UTF-8/).waitFor()

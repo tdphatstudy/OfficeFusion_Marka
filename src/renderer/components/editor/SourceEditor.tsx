@@ -1,5 +1,5 @@
 import { useEffect, useRef, type FC } from 'react'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Annotation, Compartment, EditorState } from '@codemirror/state'
 import {
   EditorView,
   keymap,
@@ -37,7 +37,11 @@ import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistor
 import { registerEditorFlush } from '@/lib/editorSession'
 import { editBudget } from '@/lib/editBudget'
 
-export const SourceEditor: FC = () => {
+const externalSync = Annotation.define<boolean>()
+
+export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
+  const activeEditor = useRef(active)
+  activeEditor.current = active
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const preferences = useRef(new Compartment())
@@ -89,8 +93,20 @@ export const SourceEditor: FC = () => {
           EditorView.contentAttributes.of({ 'aria-label': 'Markdown source', spellcheck: 'false' }),
           preferences.current.of([]),
           EditorView.updateListener.of(update => {
-            publishEditorHistory(undoDepth(update.state) > 0, redoDepth(update.state) > 0)
-            if (update.docChanged) {
+            if (activeEditor.current && update.selectionSet) {
+              window.dispatchEvent(
+                new CustomEvent('marka:position', {
+                  detail: { line: update.state.doc.lineAt(update.state.selection.main.head).number }
+                })
+              )
+            }
+            if (activeEditor.current) {
+              publishEditorHistory(undoDepth(update.state) > 0, redoDepth(update.state) > 0)
+            }
+            if (
+              update.docChanged &&
+              !update.transactions.some(transaction => transaction.annotation(externalSync))
+            ) {
               pending = true
               useEditorStore.setState({ isDirty: true })
               clearTimeout(timer)
@@ -103,11 +119,30 @@ export const SourceEditor: FC = () => {
         ]
       })
     })
+    let scrollFrame = 0
+    const scroll = (): void => {
+      if (!activeEditor.current || scrollFrame) {
+        return
+      }
+      scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = 0
+        const block = instance.lineBlockAtHeight(instance.scrollDOM.scrollTop)
+        window.dispatchEvent(
+          new CustomEvent('marka:position', {
+            detail: { line: instance.state.doc.lineAt(block.from).number }
+          })
+        )
+      })
+    }
+    instance.scrollDOM.addEventListener('scroll', scroll, { passive: true })
     view.current = instance
     published.current = useEditorStore.getState().content
     const unregisterFlush = registerEditorFlush(flush)
     publishEditorHistory(undoDepth(instance.state) > 0, redoDepth(instance.state) > 0)
     const unsubscribeHistory = subscribeEditorHistory(action => {
+      if (!activeEditor.current) {
+        return
+      }
       if (action === 'undo') {
         undo(instance)
       } else {
@@ -116,7 +151,7 @@ export const SourceEditor: FC = () => {
       instance.focus()
     })
     const navigate = (event: Event): void => {
-      if (!(event instanceof CustomEvent)) {
+      if (!activeEditor.current || !(event instanceof CustomEvent)) {
         return
       }
       const detail: unknown = event.detail
@@ -143,6 +178,8 @@ export const SourceEditor: FC = () => {
       unregisterFlush()
       window.removeEventListener('marka:navigate', navigate)
       unsubscribeHistory()
+      cancelAnimationFrame(scrollFrame)
+      instance.scrollDOM.removeEventListener('scroll', scroll)
       instance.destroy()
       view.current = null
       publishEditorHistory(false, false)
@@ -150,19 +187,29 @@ export const SourceEditor: FC = () => {
   }, [documentId])
 
   useEffect(() => {
-    if (findRequested && view.current) {
+    if (active && findRequested && view.current) {
       openSearchPanel(view.current)
       useUIStore.getState().setFindRequested(false)
     }
-  }, [findRequested, documentId])
+  }, [findRequested, documentId, active])
 
   useEffect(() => {
     const instance = view.current
-    if (instance && published.current !== content) {
-      published.current = content
-      instance.dispatch({ changes: { from: 0, to: instance.state.doc.length, insert: content } })
+    if (active && instance) {
+      publishEditorHistory(undoDepth(instance.state) > 0, redoDepth(instance.state) > 0)
     }
-  }, [content])
+  }, [active])
+
+  useEffect(() => {
+    const instance = view.current
+    if (active && instance && published.current !== content) {
+      published.current = content
+      instance.dispatch({
+        changes: { from: 0, to: instance.state.doc.length, insert: content },
+        annotations: externalSync.of(true)
+      })
+    }
+  }, [content, active])
 
   useEffect(() => {
     const applyPreferences = (): void => {

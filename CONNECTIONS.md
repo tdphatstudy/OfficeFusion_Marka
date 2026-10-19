@@ -4,13 +4,13 @@ Open the globe button in the title bar, choose **File → Open connection…**, 
 **Ctrl+Shift+C** (Command+Shift+C on macOS). Files open into the same editor with unsaved-change
 protection.
 
-| Method         | What to enter                                                                               | Save behavior                                                      |
-| -------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| This computer  | Browse for a Markdown or text file                                                          | Writes to the selected file                                        |
-| WSL            | An installed distribution and an absolute Linux path, such as `/home/me/notes.md`           | Writes to the same Linux file through `\\wsl.localhost\Distro\…`   |
-| SSH            | Host, username, optional port, verified fingerprint and `/absolute/path.md` or `~/notes.md` | Writes back to the SSH host; Save As creates a local copy          |
-| Network / Path | A UNC path such as `\\server\share\notes.md`, a mapped drive, or a mounted path             | Uses your operating system's filesystem and network authentication |
-| From URL       | An HTTP(S) raw Markdown/plain-text URL                                                      | Imports a copy; Save always chooses a local file                   |
+| Method         | What to enter                                                                      | Save behavior                                                      |
+| -------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| This computer  | Browse for a Markdown or text file                                                 | Writes to the selected file                                        |
+| WSL            | Choose a distribution, then Browse folders; a direct Linux file path is optional   | Writes to the same Linux file through `\\wsl.localhost\Distro\…`   |
+| SSH            | Host, username, optional port and verified fingerprint; connect and browse folders | Writes back to the SSH host; Save As creates a local copy          |
+| Network / Path | A UNC path such as `\\server\share\notes.md`, a mapped drive, or a mounted path    | Uses your operating system's filesystem and network authentication |
+| From URL       | An HTTP(S) raw Markdown/plain-text URL                                             | Imports a copy; Save always chooses a local file                   |
 
 SSH/URL imports accept UTF-8 text up to 5 MiB and reject binary data. Local, WSL and mounted files
 above 5 MiB open in the read-only range viewer (up to 10 GiB); each request reads at most 64 KiB.
@@ -18,6 +18,29 @@ Typed local paths require native confirmation before file access. Missing files,
 and connection failures leave the active document intact. Requests have a 30-second deadline; URL
 downloads also have a 15-second deadline. **Cancel request** releases the UI without replacing the
 active document. A pending operating-system filesystem call can finish later; its result is ignored.
+
+## Browse and choose a file
+
+WSL opens at the distribution user's Linux home after native approval. SSH connects using the
+entered password or explicitly selected key, verifies the pinned host fingerprint before
+authentication, and starts at the remote user's home. Neither flow requires knowing a file path. For
+local and mounted/network folders, **Browse a folder**/**Browse folders** uses a native folder
+picker; browsing is restricted to that approved root.
+
+The browser provides Home, Up, Back/Forward, breadcrumbs, a name filter for the current folder,
+Markdown/all-file filters and hidden-file visibility. Arrow keys move between entries; Enter opens a
+folder or file. Selecting a file and choosing **Open selected file** also works. Canceling a file
+picker returns to the hub. Switching sources preserves non-secret path drafts for the current dialog
+session.
+
+Listings scan at most 10,000 entries, return at most 200 matches per page, and never read file
+contents just to list a folder. Symbolic links are not listed; canonical local paths cannot escape
+the approved root. Browsing uses a window-owned opaque capability with a 30-minute lifetime and
+revokes it on close, reload or renderer crash. Closing the browser releases its authentication; an
+opened SSH document retains its separate bounded save session. Recursive folder search, filesystem
+watching and a persistent workspace tree are not implemented; the filter searches the current
+directory only. A missing result in an exceptionally large directory may be beyond the scan limit,
+as indicated in the browser.
 
 ## SSH requirements
 
@@ -29,14 +52,14 @@ active document. A pending operating-system filesystem call can finish later; it
   mismatch is rejected before credentials are sent. Marka does not silently accept host keys or edit
   `known_hosts`. To rotate a server key, verify the new fingerprint independently and update the
   profile; do not bypass a mismatch.
-- Passwords and passphrases are kept only in main-process memory, for up to 30 minutes after
-  opening. Reloading or closing the renderer clears them. Key contents are read only from the
-  explicitly selected file for each operation; they are not persisted. The bundled `ssh2` transport
-  does not require a system OpenSSH installation. Keyboard-interactive/MFA and hardware-backed keys
-  are not supported in this version.
+- Form secrets stay in memory and are cleared when the dialog closes or a connection succeeds.
+  Main-process authentication sessions last at most 30 minutes. Reloading or closing the renderer
+  clears them. Key contents are read only from the explicitly selected file for each operation; they
+  are not persisted. The bundled `ssh2` transport does not require a system OpenSSH installation.
+  Keyboard-interactive/MFA and hardware-backed keys are not supported in this version.
 - The remote filesystem must be on a Linux host with GNU `cat`, `sha256sum`, `mktemp`, `cp` and
-  `mv`. Windows SSH servers and BSD-only command sets are not supported for remote writes in this
-  version.
+  `mv`; folder browsing also requires GNU `find` and `head -z`. Windows SSH servers and BSD-only
+  command sets are not supported for remote writes in this version.
 
 **Save** compares the server's current bytes with the saved snapshot, uploads into a temporary file
 in the same directory, compares again, preserves mode/ownership, and renames the temporary file over
@@ -65,8 +88,11 @@ session first, then use **Network / Path** or **This computer**.
 
 Profiles store a name, endpoint, path and verified server fingerprint on this device. They do not
 store key paths, key contents, passwords or passphrases. Save a profile after filling in the target
-file; choose the saved entry to fill the form, then enter authentication details. Remove a profile
-with its trash button and clear recent documents with **Clear**. URL query parameters can contain
+file, or leave the SSH path empty to save a host connection; choose the saved entry to fill the
+form, then enter authentication details. Edit a profile to update its host/fingerprint/path.
+Duplicate names are rejected instead of replacing another profile silently. At most 8 profiles can
+be saved; adding another requires removing or editing one. Remove a profile with its trash button
+and search all 12 recent documents or clear them with **Clear**. URL query parameters can contain
 credentials, so query-bearing URLs are neither saved as profiles nor remembered in history; they can
 still be imported directly.
 

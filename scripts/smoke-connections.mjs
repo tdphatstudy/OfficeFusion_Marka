@@ -316,11 +316,11 @@ try {
   remoteContent = '# Changed outside Marka'
   await source().fill('# Keep my draft')
   await page.keyboard.press('Control+s')
-  await page.getByRole('alert').filter({ hasText: 'File changed on the server' }).waitFor()
+  await page.getByRole('dialog', { name: 'File changed outside Marka' }).waitFor()
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click()
   assert.equal(remoteContent, '# Changed outside Marka')
   assert.equal(await source().innerText(), '# Keep my draft')
   passed('Mock server conflict response preserves remote bytes and the dirty draft')
-
   await openHub()
   await page.getByRole('button', { name: 'Local SSH fixture', exact: true }).click()
   assert.equal(await page.getByLabel('Password', { exact: true }).inputValue(), '')

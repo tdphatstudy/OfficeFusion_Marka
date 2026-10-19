@@ -43,7 +43,11 @@ function headingPositions(): (tree: HtmlNode) => void {
       if (++nodes > 20_000 || depth > 100) {
         throw new Error('Document is too complex to preview. Use Markdown mode.')
       }
-      if (node.tagName && /^h[1-6]$/.test(node.tagName) && node.position) {
+      if (
+        node.tagName &&
+        /^(?:h[1-6]|p|pre|blockquote|li|table)$/.test(node.tagName) &&
+        node.position
+      ) {
         node.properties = { ...node.properties, 'data-source-line': node.position.start.line }
       }
       node.children?.forEach(child => visit(child, depth + 1))

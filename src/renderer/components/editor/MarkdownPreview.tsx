@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FC } from 'react'
 import { useEditorStore } from '@/stores/editorStore'
 import 'katex/dist/katex.min.css'
 import { createLatestTask } from '@/lib/latestTask'
+import { changeViewMode } from '@/lib/commands'
 import { previewCharacters } from '../../../shared/documents'
 
 interface PreviewResult {
@@ -16,6 +17,8 @@ export const MarkdownPreview: FC = () => {
   const queue = useRef<ReturnType<
     typeof createLatestTask<{ id: number; content: string }, PreviewResult>
   > | null>(null)
+  const [revision, setRevision] = useState(0)
+  const [follow, setFollow] = useState(false)
   const requestId = useRef(0)
   const preview = useRef<HTMLElement>(null)
   useEffect(() => {
@@ -65,14 +68,14 @@ export const MarkdownPreview: FC = () => {
       reusable?.terminate()
       queue.current = null
     }
-  }, [])
+  }, [revision])
   useEffect(() => {
     const id = ++requestId.current
     const timer = setTimeout(() => queue.current?.submit({ id, content }), 120)
     return () => {
       clearTimeout(timer)
     }
-  }, [content])
+  }, [content, revision])
   useEffect(() => {
     const navigate = (event: Event): void => {
       if (!(event instanceof CustomEvent)) {
@@ -96,6 +99,41 @@ export const MarkdownPreview: FC = () => {
     }
   }, [])
 
+  useEffect(() => {
+    if (!follow) {
+      return
+    }
+    const position = (event: Event): void => {
+      if (!(event instanceof CustomEvent)) {
+        return
+      }
+      const detail: unknown = event.detail
+      if (
+        !detail ||
+        typeof detail !== 'object' ||
+        !('line' in detail) ||
+        typeof detail.line !== 'number'
+      ) {
+        return
+      }
+      let target: HTMLElement | null = null
+      for (const element of preview.current?.querySelectorAll<HTMLElement>('[data-source-line]') ??
+        []) {
+        if (Number(element.dataset.sourceLine) <= detail.line) {
+          target = element
+        } else {
+          break
+        }
+      }
+      const container = preview.current?.parentElement
+      if (target && container) {
+        container.scrollTop +=
+          target.getBoundingClientRect().top - container.getBoundingClientRect().top
+      }
+    }
+    window.addEventListener('marka:position', position)
+    return () => window.removeEventListener('marka:position', position)
+  }, [follow])
   let status = result.id === requestId.current && result.id > 0 ? 'Up to date' : 'Updating…'
   if (result.error) {
     status = 'Unavailable'
@@ -108,14 +146,40 @@ export const MarkdownPreview: FC = () => {
     >
       <div className="pane-heading">
         <span>Preview</span>
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={follow}
+            onChange={event => setFollow(event.target.checked)}
+          />
+          Follow source
+        </label>
         <span>{status}</span>
       </div>
       <div className="preview-scroll flex-1 overflow-auto p-6">
         {result.error ? (
-          <p role="alert" className="text-sm text-text-secondary">
-            Preview is paused because this document exceeds a rendering budget or could not render.
-            Your source is safe; use Markdown mode or a smaller section.
-          </p>
+          <div role="alert" className="text-sm text-text-secondary">
+            <p>
+              Preview is paused because this document exceeds a rendering budget or could not
+              render. Your source is safe; use Markdown mode or a smaller section.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button className="secondary-action" onClick={() => changeViewMode('source')}>
+                Open Markdown mode
+              </button>
+              {content.length <= previewCharacters && (
+                <button
+                  className="secondary-action"
+                  onClick={() => {
+                    setResult({ id: 0, html: '', error: false })
+                    setRevision(revision + 1)
+                  }}
+                >
+                  Retry preview
+                </button>
+              )}
+            </div>
+          </div>
         ) : (
           <article
             ref={preview}
