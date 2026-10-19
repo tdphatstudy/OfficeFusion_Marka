@@ -60,14 +60,18 @@ const connectionHints: Record<ConnectionKind, { placeholder: string; help: strin
   }
 }
 
-const ConnectionForm: FC = () => {
+interface ConnectionFormProps {
+  browser: BrowserSession | null
+  setBrowser: (session: BrowserSession | null) => void
+}
+
+const ConnectionForm: FC<ConnectionFormProps> = ({ browser, setBrowser }) => {
   const [kind, setKind] = useState<ConnectionKind>('local')
   const [capabilities, setCapabilities] = useState<ConnectionCapabilities | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [path, setPath] = useState('')
   const paths = useRef<Partial<Record<ConnectionKind, string>>>({})
-  const [browser, setBrowser] = useState<BrowserSession | null>(null)
   const [guidance, setGuidance] = useState('')
   const [distribution, setDistribution] = useState('')
   const [host, setHost] = useState('')
@@ -732,11 +736,27 @@ const ConnectionForm: FC = () => {
 export const ConnectionHub: FC = () => {
   const open = useUIStore(state => state.connectionsOpen)
   const busy = useUIStore(state => state.fileBusy)
+  const [browser, setBrowser] = useState<BrowserSession | null>(null)
+  const changeBrowser = (session: BrowserSession | null): void => {
+    if (browser && browser.id !== session?.id) {
+      void window.api.closeBrowser(browser.id).catch(() => undefined)
+    }
+    setBrowser(session)
+  }
+  useEffect(() => {
+    if (!open && browser) {
+      void window.api.closeBrowser(browser.id).catch(() => undefined)
+      setBrowser(null)
+    }
+  }, [open, browser])
   return (
     <Dialog.Root
       open={open}
       onOpenChange={value => {
         if (!busy) {
+          if (!value) {
+            changeBrowser(null)
+          }
           useUIStore.getState().setConnectionsOpen(value)
         }
       }}
@@ -744,7 +764,7 @@ export const ConnectionHub: FC = () => {
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
         <Dialog.Content className="dialog-content top-[5%] flex h-[85vh] max-h-[90vh] max-w-4xl flex-col overflow-hidden">
-          <ConnectionForm />
+          <ConnectionForm browser={browser} setBrowser={changeBrowser} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

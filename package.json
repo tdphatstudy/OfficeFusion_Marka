@@ -14,6 +14,7 @@
     "test:smoke": "node scripts/smoke-electron.mjs",
     "test:connections": "node scripts/smoke-connections.mjs",
     "test:ux": "node scripts/smoke-ux.mjs",
+    "test:strict": "node scripts/smoke-strict.mjs",
     "test:security": "node scripts/smoke-security.mjs",
     "test:package": "node scripts/smoke-package.mjs",
     "dev": "electron-vite dev",

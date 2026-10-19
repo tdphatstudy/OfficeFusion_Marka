@@ -190,7 +190,10 @@ export function registerIpcHandlers(): void {
   }
   const browser = (event: Electron.IpcMainInvokeEvent, id: unknown): FileBrowser => {
     const value = browsers.get(event.sender.id)
-    if (!value || value.session.id !== id || value.expires < Date.now()) {
+    if (!value || value.session.id !== id) {
+      throw new Error('Folder session expired. Connect again to continue.')
+    }
+    if (value.expires < Date.now()) {
       clearBrowser(event.sender.id)
       throw new Error('Folder session expired. Connect again to continue.')
     }

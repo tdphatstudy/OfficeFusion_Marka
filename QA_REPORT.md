@@ -1,10 +1,38 @@
 # Marka — Kết quả kiểm chứng đợt nâng cấp UX
 
-## Đợt browser và document workflows — 19/10/2026
+## Sửa vòng đời tài nguyên trong development StrictMode — 19/10/2026
+
+Đã tái hiện lỗi trên baseline `bfd8041` bằng renderer bundle dùng React development, chạy trên
+Electron với profile riêng và static server localhost. Probe xác nhận 2 lần effect setup/1 lần
+cleanup của StrictMode. Cleanup của FileBrowser đóng session vừa cấp; PagedViewer cũng đóng reader
+theo cách tương tự. Các bộ smoke production trước đó không kích hoạt effect replay nên bỏ sót lỗi.
+
+Phiên browser hiện thuộc Connection Hub: đóng Hub, quay về Sources hoặc hoàn tất Open mới giải phóng
+phiên; cleanup của view chỉ hủy task UI. Reader thuộc document lifecycle, được đóng khi tài liệu
+thay reader/được thay thế. Reload, crash và đóng window vẫn thu hồi quyền ở main process; không tắt
+StrictMode, bỏ kiểm tra ownership hoặc kéo dài thời hạn 30 phút. Request mang ID cũ bị từ chối mà
+không xóa phiên mới hợp lệ của cùng window.
+
+Kiểm chứng sau sửa:
+
+- `pnpm test:strict`: **6/6**; effect replay thật, browser refresh, đóng Hub thu hồi session, reader
+  qua replay/Next range, đổi document giải phóng reader, stale request không hủy session mới.
+- `pnpm test:ux` với Ubuntu fixture `/tmp`: **11/11**.
+- `pnpm test:security`: **15/15**.
+- `pnpm test`: **94/94**; TypeScript main/renderer, ESLint và production build pass.
+- Một lượt chạy cạnh các build/Electron job vượt ngưỡng preview: 2.555 s trên budget 2.5 s. Chạy
+  riêng sau khi các job kia kết thúc đạt 2.329 s và toàn bộ 94 test pass; không đổi ngưỡng hoặc
+  parser.
+
+Diagnostic probes chỉ được chèn vào test bundle dưới `tmp/strict-smoke`, không sửa production entry
+và không thêm privileged IPC. Test mới dùng file sinh tự động và localhost; không đọc SSH key hay
+host thật. Chưa tạo installer/ASAR mới trong đợt sửa này.
+
+## Đợt browser và document workflows — 19/10/2026, baseline bfd8041
 
 Môi trường: Windows, Node 20.19.5, pnpm 9, Electron 44.9.0. Các kết quả bên dưới thuộc production
-build hiện tại, chạy bằng profile thử nghiệm riêng. Phần lịch sử phía sau giữ nguyên ngày/môi trường
-của từng đợt cũ.
+build của đợt baseline, chạy bằng profile thử nghiệm riêng. Phần lịch sử phía sau giữ nguyên
+ngày/môi trường của từng đợt cũ.
 
 | Gate                                                               | Kết quả |
 | ------------------------------------------------------------------ | ------- |

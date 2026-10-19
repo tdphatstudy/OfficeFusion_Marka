@@ -65,6 +65,7 @@ pnpm build
 pnpm test:smoke
 pnpm test:connections
 pnpm test:ux
+pnpm test:strict
 pnpm test:security
 node scripts/benchmark-editor.mjs
 ```
@@ -74,6 +75,11 @@ with Playwright, an isolated profile, and real test files under `tmp/electron-sm
 responses are automated. Build first; Electron must be able to launch in the current desktop
 session. No separate Playwright browser download is needed. Screenshots and export samples are saved
 in `tmp/`.
+
+`test:strict` bundles the renderer with development React and verifies that StrictMode actually
+replays effects. It exercises browser and large-file reader lifetimes, genuine close/document
+replacement, and stale session requests against the real Electron bridge. Its diagnostic probes
+exist only in the temporary test bundle; they are not part of the production renderer.
 
 `test:connections` covers theme switching, Connection Hub, URL import and SSH against a localhost
 mock server. It generates its own disposable host/client keys and fake passwords, including an

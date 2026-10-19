@@ -35,6 +35,10 @@ export function useDocumentLifecycle(): void {
     }
     const unregister = registerRecoveryFlush(flush)
     const unsubscribe = useEditorStore.subscribe((state, previous) => {
+      const previousReader = previous.pagedDocument?.handle
+      if (previousReader && previousReader !== state.pagedDocument?.handle) {
+        void window.api.closeReader(previousReader).catch(() => undefined)
+      }
       if (
         state.content === previous.content &&
         state.isDirty === previous.isDirty &&

@@ -92,12 +92,6 @@ export const PagedViewer: FC<PagedViewerProps> = ({ document }) => {
       active = false
     }
   }, [document.handle, offset])
-  useEffect(
-    () => () => {
-      void window.api.closeReader(document.handle).catch(() => undefined)
-    },
-    [document.handle]
-  )
   let status = ''
   if (page) {
     status = `Bytes ${page.offset.toLocaleString()}–${page.nextOffset.toLocaleString()} of ${document.size.toLocaleString()}`

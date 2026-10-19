@@ -28,7 +28,7 @@ export const FileBrowser: FC<{ session: BrowserSession; back: () => void }> = ({
     typeof createLatestTask<BrowserQuery, { page?: BrowserPage; error?: string }>
   > | null>(null)
   useEffect(() => {
-    queue.current = createLatestTask(
+    const instance = createLatestTask<BrowserQuery, { page?: BrowserPage; error?: string }>(
       async query => {
         try {
           return { page: await window.api.listFolder(session.id, query) }
@@ -47,9 +47,12 @@ export const FileBrowser: FC<{ session: BrowserSession; back: () => void }> = ({
       },
       35000
     )
+    queue.current = instance
     return () => {
-      queue.current?.dispose()
-      void window.api.closeBrowser(session.id).catch(() => undefined)
+      instance.dispose()
+      if (queue.current === instance) {
+        queue.current = null
+      }
     }
   }, [session.id])
   useEffect(() => {
