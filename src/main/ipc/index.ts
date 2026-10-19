@@ -87,8 +87,8 @@ export function registerIpcHandlers(): void {
         credentials.delete(owner)
       })
       event.sender.on('render-process-gone', cleanup)
-      event.sender.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => {
-        if (mainFrame) {
+      event.sender.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+        if (mainFrame && !inPlace) {
           cleanup()
         }
       })

@@ -211,6 +211,26 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.cm-content')?.textContent?.includes('# Original')
   )
+  await page.evaluate(() => {
+    location.hash = 'security-anchor-fixture'
+  })
+  assert.equal(
+    (await page.evaluate(path => window.api.refreshFile(path), fixture)).content,
+    '# Original'
+  )
+  const queryDenied = await page.evaluate(async path => {
+    history.replaceState(null, '', `${location.pathname}?security-fixture=1`)
+    try {
+      await window.api.refreshFile(path)
+      return 'allowed'
+    } catch (error) {
+      return error.message
+    } finally {
+      history.replaceState(null, '', `${location.pathname}#security-anchor-fixture`)
+    }
+  }, fixture)
+  assert.match(queryDenied, /Untrusted IPC sender/)
+  passed('Same-document anchor navigation preserves file access while reload still revokes it')
   await source().fill('# My dirty edits')
   await writeFile(fixture, '# External edit')
   await page.keyboard.press('Control+s')

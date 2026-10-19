@@ -165,7 +165,7 @@ kết quả hiện tại; các số liệu và giới hạn ở các đợt trư
 | Regression (`pnpm test`)                                           | 83/83 pass                    |
 | Native editor (`pnpm test:smoke`)                                  | 27/27 pass                    |
 | Connections (`MARKA_TEST_WSL_DISTRO=Ubuntu pnpm test:connections`) | 19/19 pass                    |
-| Native security (`pnpm test:security`)                             | 14/14 pass                    |
+| Native security (`pnpm test:security`)                             | 15/15 pass                    |
 | Windows unpacked package                                           | Pass, không publish, không ký |
 | ASAR runtime (`pnpm test:package`)                                 | 2/2 pass                      |
 | Production dependency audit                                        | 0 advisory                    |
@@ -219,3 +219,15 @@ external-writer finalcheck/rename race chưa strict CAS, chưa chứng nhận po
 SACL/ADS/EFS hoặc metadata trên mọi filesystem. macOS existing-file replacement fail closed và
 native macOS/Linux UI chưa được chứng nhận. Origin migration 44 được test, chưa certify nâng định
 dạng database Chromium 33→44. Các giới hạn này không được coi là testcase đã pass.
+
+## Bổ sung 19/10/2026 — Điều hướng anchor trong cùng tài liệu
+
+Test native phát hiện `#anchor` làm sender URL khác URL đã đăng ký và thu hồi file grants dù
+renderer vẫn là cùng một document. Đã sửa: chỉ bỏ fragment khi đối chiếu trusted document URL, không
+thu hồi grants cho same-document navigation. Host/path/query và main-frame identity vẫn được kiểm
+tra; reload/cross-document navigation tiếp tục thu hồi quyền.
+
+Regression native đã tái hiện lỗi trước sửa và pass sau sửa: refresh file sau đổi anchor, từ chối
+query bị sửa và thu hồi quyền sau reload khi URL vẫn mang fragment. Suite security hiện **15/15**,
+regression **83/83**; lint, hai TypeScript projects và production build pass. Audit kiểm tra lại
+ngày 19/10 vẫn 0 production advisory và 4 development findings như phần trên.

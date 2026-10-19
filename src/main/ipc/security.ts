@@ -2,9 +2,14 @@ import type { BrowserWindow } from 'electron'
 
 const trustedWindows = new Map<number, string>()
 
+function documentUrl(url: string): string {
+  const fragment = url.indexOf('#')
+  return fragment < 0 ? url : url.slice(0, fragment)
+}
+
 export function trustWindow(window: BrowserWindow, url: string): void {
   const owner = window.webContents.id
-  trustedWindows.set(owner, url)
+  trustedWindows.set(owner, documentUrl(url))
   window.once('closed', () => trustedWindows.delete(owner))
 }
 
@@ -15,7 +20,7 @@ export function assertSender(event: Electron.IpcMainEvent | Electron.IpcMainInvo
     !expected ||
     !frame ||
     frame !== event.sender.mainFrame ||
-    frame.url !== expected ||
+    documentUrl(frame.url) !== expected ||
     event.sender.isDestroyed()
   ) {
     throw new Error('Untrusted IPC sender.')

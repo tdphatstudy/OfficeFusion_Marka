@@ -60,13 +60,14 @@ calls can outlive the UI cancellation/deadline.
 ## Trust boundaries and recovery
 
 The renderer uses sandbox, context isolation, no Node integration and a scoped CJS preload. IPC
-requires a registered application window, the exact application URL and its main frame. Native file
-grants, page handles, key-picker grants and operation generations belong to their window; late
-operations cannot regain authorization after navigation. There is no arbitrary read-file API.
-Permissions/downloads are denied. CSP blocks frames, objects and external document images. Raw
-Markdown is sanitized before trusted math/highlight transforms; KaTeX uses trust=false with finite
-size/expansion limits. PDF uses a separate sandboxed, script-disabled, temporary session with no
-preload or network access. Print windows and workers are cleaned up on success/error/deadline.
+requires a registered application window, the exact application document URL and its main frame;
+benign URL fragments are ignored. Native file grants, page handles, key-picker grants and operation
+generations belong to their window; late operations cannot regain authorization after reload or
+cross-document navigation. There is no arbitrary read-file API. Permissions/downloads are denied.
+CSP blocks frames, objects and external document images. Raw Markdown is sanitized before trusted
+math/highlight transforms; KaTeX uses trust=false with finite size/expansion limits. PDF uses a
+separate sandboxed, script-disabled, temporary session with no preload or network access. Print
+windows and workers are cleaned up on success/error/deadline.
 
 Recovery uses IndexedDB structured records, not synchronous full-document localStorage snapshots.
 Normal close awaits a checkpoint. Other sessions' drafts remain separate; deleting this session's
