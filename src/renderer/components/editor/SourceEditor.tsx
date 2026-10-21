@@ -36,6 +36,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
 import { registerEditorFlush } from '@/lib/editorSession'
 import { editBudget } from '@/lib/editBudget'
+import { writingFonts } from '../../../shared/fonts'
 
 const externalSync = Annotation.define<boolean>()
 
@@ -45,6 +46,7 @@ export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const preferences = useRef(new Compartment())
+  const language = useRef(new Compartment())
   const content = useEditorStore(state => state.content)
   const config = useEditorStore(state => state.config)
   const documentId = useEditorStore(state => state.documentId)
@@ -59,10 +61,18 @@ export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     let pending = false
     let lastPublish = Date.now()
+    let reducedHighlighting = useEditorStore.getState().content.length > 256 * 1024
     const flush = (): void => {
       clearTimeout(timer)
       if (pending) {
         pending = false
+        const shouldReduce = instance.state.doc.length > 256 * 1024
+        if (shouldReduce !== reducedHighlighting) {
+          reducedHighlighting = shouldReduce
+          instance.dispatch({
+            effects: language.current.reconfigure(shouldReduce ? [] : markdown())
+          })
+        }
         published.current = instance.state.doc.toString()
         useEditorStore.getState().setContent(published.current)
         lastPublish = Date.now()
@@ -73,7 +83,7 @@ export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
       state: EditorState.create({
         doc: useEditorStore.getState().content,
         extensions: [
-          markdown(),
+          language.current.of(reducedHighlighting ? [] : markdown()),
           editBudget(() =>
             useUIStore
               .getState()
@@ -108,11 +118,20 @@ export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
               !update.transactions.some(transaction => transaction.annotation(externalSync))
             ) {
               pending = true
-              useEditorStore.setState({ isDirty: true })
+              if (!useEditorStore.getState().isDirty) {
+                useEditorStore.setState({ isDirty: true })
+              }
               clearTimeout(timer)
               timer = setTimeout(
                 flush,
-                Math.max(0, Math.min(150, 500 - (Date.now() - lastPublish)))
+                Math.max(
+                  0,
+                  Math.min(
+                    instance.state.doc.length > 256 * 1024 ? 1000 : 150,
+                    (instance.state.doc.length > 256 * 1024 ? 1800 : 500) -
+                      (Date.now() - lastPublish)
+                  )
+                )
               )
             }
           })
@@ -173,10 +192,26 @@ export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
       instance.focus()
     }
     window.addEventListener('marka:navigate', navigate)
+    const insertImage = (event: Event): void => {
+      if (
+        !activeEditor.current ||
+        !(event instanceof CustomEvent) ||
+        typeof event.detail !== 'string'
+      ) {
+        return
+      }
+      const position = instance.state.selection.main
+      instance.dispatch({
+        changes: { from: position.from, to: position.to, insert: `![Image](${event.detail})` }
+      })
+      instance.focus()
+    }
+    window.addEventListener('marka:insert-image', insertImage)
     return () => {
       clearTimeout(timer)
       unregisterFlush()
       window.removeEventListener('marka:navigate', navigate)
+      window.removeEventListener('marka:insert-image', insertImage)
       unsubscribeHistory()
       cancelAnimationFrame(scrollFrame)
       instance.scrollDOM.removeEventListener('scroll', scroll)
@@ -232,7 +267,7 @@ export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
               },
               '.cm-scroller': {
                 overflow: 'auto',
-                fontFamily: 'Consolas, "Cascadia Code", "SFMono-Regular", monospace',
+                fontFamily: writingFonts[config.fontFamily],
                 fontSize: `${config.fontSize}px`,
                 lineHeight: `${config.lineHeight}`
               },

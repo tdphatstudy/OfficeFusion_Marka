@@ -1,5 +1,31 @@
 # Marka — Kết quả kiểm chứng đợt nâng cấp UX
 
+## Ảnh local, font đa ngôn ngữ và tài liệu lớn — 21/10/2026
+
+Đã thay slash command ảnh URL mẫu bị CSP chặn bằng native picker. Ảnh PNG/JPEG/GIF/WebP được kiểm
+tra định dạng và giới hạn 8 MiB/32 megapixel, sao chép vào `assets/` cạnh file Markdown, rồi hiển
+thị ở Write và Split qua quyền đọc gắn với document. Preview giữ nguồn ảnh như dữ liệu cho đến khi
+ảnh vào viewport; Write không phát request trực tiếp cho đường dẫn tương đối. Các đường dẫn ra ngoài
+thư mục tài liệu, symlink, SVG và URL bên ngoài bị từ chối. Tài liệu chưa lưu được dẫn qua Save
+trước khi chọn ảnh.
+
+Font writing/preview/source có chuỗi fallback cho tiếng Việt, Trung, Nhật và Hàn; Settings cho xem
+mẫu trực tiếp. Source trên 256 KiB giảm chi phí tô màu cú pháp và giãn nhịp đồng bộ toàn bộ chuỗi.
+
+- `pnpm test`: **99/99** (chạy riêng bên ngoài sandbox Windows để ACL và rename của fixture hoạt
+  động); có test quyền ảnh, Unicode, đường dẫn vượt scope, định dạng giả và preview chặn tải sớm.
+  Một lần benchmark preview mất 2,929 s trên ngưỡng 2,5 s; chạy lại khi máy rảnh đạt ngưỡng, không
+  sửa ngưỡng kiểm thử.
+- `pnpm test:smoke`: **29/29** với profile/ảnh sinh riêng; picker → assets → Split → Write → quay
+  lại Markdown, console sạch. Document 2,4 MiB gồm Việt/Trung/Nhật chỉnh sửa trong **273 ms** trên
+  máy test; số dòng DOM được ảo hóa dưới 500. Đây là một phép đo smoke, không phải cam kết tốc độ
+  máy khác.
+- `pnpm test:security`: **15/15**. TypeScript main/renderer, ESLint và production build pass.
+- `pnpm test:strict`: **6/6**; browser session và reader vẫn sống đúng qua StrictMode replay.
+
+Giới hạn còn lại: file >5 MiB tiếp tục chỉ đọc theo thiết kế; SSH images, thư viện ảnh cloud và
+chuyển kèm assets khi Save As sang thư mục khác chưa có. Không dùng SSH key/host cá nhân trong test.
+
 ## Sửa vòng đời tài nguyên trong development StrictMode — 19/10/2026
 
 Đã tái hiện lỗi trên baseline `bfd8041` bằng renderer bundle dùng React development, chạy trên

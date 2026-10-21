@@ -38,6 +38,9 @@ function passed(message) {
 try {
   page = await app.firstWindow()
   page.on('pageerror', error => errors.push(error.message))
+  page.on('requestfailed', request =>
+    console.log('REQUEST FAILED', request.url(), request.failure())
+  )
   page.on('console', message => {
     if (message.type() === 'error') {
       errors.push(message.text())
@@ -171,10 +174,25 @@ try {
   await page.getByRole('button', { name: 'Editor settings', exact: true }).click()
   await page.getByLabel('Show line numbers', { exact: true }).uncheck()
   await page.getByLabel('Tab size', { exact: true }).selectOption('4')
+  await page.getByLabel('Writing font', { exact: true }).selectOption('prose')
+  assert.match(
+    await page.getByLabel('Writing font preview').innerText(),
+    /Tiếng Việt · 中文 · 日本語 · 한국어/
+  )
+  assert.match(
+    await page.locator('.cm-scroller').evaluate(element => getComputedStyle(element).fontFamily),
+    /Noto Serif/
+  )
+  assert.match(
+    await page
+      .locator('.markdown-preview')
+      .evaluate(element => getComputedStyle(element).fontFamily),
+    /Noto Serif/
+  )
   await page.screenshot({ animations: 'disabled', path: resolve(root, 'settings-dark.png') })
   await page.getByRole('button', { name: 'Close settings' }).click()
   assert.equal(await page.locator('.cm-lineNumbers').count(), 0)
-  passed('Editor preferences reconfigure CodeMirror without losing content')
+  passed('Editor preferences reconfigure CJK-aware writing fonts without losing content')
 
   await source.fill('# Recovery\n\nRecover this unsaved text.')
   await waitForDraft(page, 'Recover this unsaved text.')
@@ -231,6 +249,63 @@ try {
     /Real filesystem content/
   )
   passed('Open reads real files and replaces the document after discard confirmation')
+
+  const image = resolve(root, 'selected-image.png')
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=',
+    'base64'
+  )
+  await writeFile(image, png)
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
+  }, image)
+  await page.getByRole('button', { name: 'Insert local image' }).click()
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('![Image](assets/')
+  )
+  const imageReference = (await source.innerText()).match(/assets\/[^)]+\.png/)?.[0]
+  assert.ok(imageReference)
+  assert.deepEqual(await readFile(resolve(root, imageReference)), png)
+  await page.getByRole('button', { name: 'Split', exact: true }).click()
+  await page.waitForFunction(() => {
+    const image = document.querySelector('.markdown-preview img')
+    return image instanceof HTMLImageElement && image.complete && image.naturalWidth === 1
+  })
+  await page.getByRole('button', { name: 'Write', exact: true }).click()
+  await page.waitForFunction(() => {
+    const image = document.querySelector('.tiptap .node-image img')
+    return image instanceof HTMLImageElement && image.complete && image.naturalWidth === 1
+  })
+  passed('Local image picker copies an image and displays it in Split and Write')
+  await page.getByRole('button', { name: 'Markdown', exact: true }).click()
+  assert.match(await source.innerText(), /!\[Image\]\(assets\/selected-image-[a-f0-9]{8}\.png\)/)
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
+  }, opened)
+
+  const performanceText =
+    '# Performance\n\n' +
+    Array.from({ length: 55_000 }, (_, index) => `Dòng ${index}: Tiếng Việt 中文 日本語.\n`).join(
+      ''
+    )
+  await writeFile(opened, performanceText)
+  await page.keyboard.press('Control+o')
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('Dòng 0:')
+  )
+  const editStart = performance.now()
+  await source.press('Control+End')
+  await source.press('Enter')
+  await source.type('Edited large document')
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('Edited large document')
+  )
+  const editElapsed = performance.now() - editStart
+  assert.ok((await page.locator('.cm-line').count()) < 500)
+  assert.ok(editElapsed < 6000, `Large document edit took ${editElapsed.toFixed(0)}ms`)
+  passed(
+    `Multi-script ${(Buffer.byteLength(performanceText) / 1024 / 1024).toFixed(1)} MiB document remains editable with virtualized lines (${editElapsed.toFixed(0)}ms)`
+  )
 
   const large =
     '# Large file\n\n' +

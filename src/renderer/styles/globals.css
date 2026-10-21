@@ -46,7 +46,9 @@ body,
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family:
+    'Segoe UI', 'Noto Sans', 'Noto Sans CJK SC', 'Noto Sans CJK JP', 'Microsoft YaHei', 'Yu Gothic',
+    'Malgun Gothic', system-ui, sans-serif;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -349,6 +351,18 @@ select:focus-visible,
 .tiptap {
   font-size: inherit;
   line-height: inherit;
+}
+
+.markdown-preview {
+  font-family:
+    'Segoe UI', 'Noto Sans', 'Noto Sans CJK SC', 'Noto Sans CJK JP', 'Microsoft YaHei', 'Yu Gothic',
+    'Malgun Gothic', sans-serif;
+}
+
+.markdown-preview img,
+.tiptap img {
+  max-width: 100%;
+  height: auto;
 }
 
 .markdown-preview pre {

@@ -60,6 +60,22 @@ function renderedTreeBudget(): (tree: HtmlNode) => void {
   return headingPositions()
 }
 
+function previewImageSources(options: { enabled: boolean }): (tree: HtmlNode) => void {
+  return tree => {
+    if (!options.enabled) {
+      return
+    }
+    const visit = (node: HtmlNode): void => {
+      if (node.tagName === 'img' && typeof node.properties?.src === 'string') {
+        node.properties['data-markdown-src'] = node.properties.src
+        delete node.properties.src
+      }
+      node.children?.forEach(visit)
+    }
+    visit(tree)
+  }
+}
+
 function createProcessor(output: 'htmlAndMathml' | 'mathml') {
   return unified()
     .use(remarkParse)
@@ -69,6 +85,7 @@ function createProcessor(output: 'htmlAndMathml' | 'mathml') {
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
     .use(rehypeSanitize, previewSchema)
+    .use(previewImageSources, { enabled: output === 'htmlAndMathml' })
     .use(headingPositions)
     .use(rehypeKatex, { throwOnError: false, trust: false, maxSize: 20, maxExpand: 500, output })
     .use(rehypeHighlight, { detect: false, ignoreMissing: true })

@@ -7,10 +7,14 @@ A desktop writing space built with Electron, React and TypeScript.
 - Write mode with tables, task lists, formatting, slash commands and in-place find/replace.
   Supported mode changes retain editor instances and Undo history within the current document.
 - CodeMirror Markdown editing with highlighting, undo/redo, line numbers, word wrap, configurable
-  indentation, and find/replace.
+  indentation, and find/replace. Above 256 KiB, source mode reduces syntax work and batches full
+  document synchronization while preserving immediate typing and Save.
 - Resizable Split view with Markdown and preview, stacked at smaller window widths.
 - Sanitized Markdown preview with GFM tables, task lists, footnotes, syntax highlighting and KaTeX.
   Preview parsing runs in a worker, independently of typing.
+- Insert local PNG, JPEG, GIF or WebP images through the native picker. Marka copies each image into
+  an `assets/` folder beside the saved document and stores a relative Markdown link. Images load in
+  Write and Split through the document's scoped file grant; external image requests stay blocked.
 - Document outline with correct source navigation and active-section indication, including setext
   and H1–H6 headings. Split preview can optionally follow source positions.
 - New, Open, Save and Save As with unsaved-change protection and visible error feedback.
@@ -25,7 +29,8 @@ A desktop writing space built with Electron, React and TypeScript.
   and cancellation, preserving matches across chunk/action boundaries. Editable documents stay
   within a 5 MiB UTF-8 budget.
 - Searchable command palette, meeting notes and project brief templates.
-- Light/dark/system appearance with a quick theme switch, writing preferences and focus mode.
+- Light/dark/system appearance with a quick theme switch, writing preferences and focus mode. Font
+  choices include system fallback for Vietnamese, Chinese, Japanese and Korean text.
 - Connection Hub for local files, Windows WSL distributions, SSH Linux hosts, network paths and raw
   Markdown URLs, with editable saved profiles and searchable recent documents. WSL and SSH connect
   to a folder browser with breadcrumbs, name/Markdown filters and bounded listing pages.

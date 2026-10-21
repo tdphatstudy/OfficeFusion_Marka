@@ -454,6 +454,33 @@ export function registerIpcHandlers(): void {
     }
     return access(event).closeReader(handle)
   })
+  handle('image:load', (event, path, reference) => {
+    if (typeof reference !== 'string') {
+      throw new Error('Invalid image reference.')
+    }
+    return access(event).image(checkedPath(path), reference)
+  })
+  handle('image:insert', async (event, path) => {
+    const documentPath = checkedPath(path)
+    const fileAccess = access(event)
+    if (!fileAccess.hasGrant(documentPath)) {
+      throw new Error('Save or reopen the document before inserting a local image.')
+    }
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) {
+      return null
+    }
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Insert image',
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }],
+      properties: ['openFile']
+    })
+    if (result.canceled || !result.filePaths[0]) {
+      return null
+    }
+    assertCurrent(event)
+    return fileAccess.importImage(documentPath, result.filePaths[0])
+  })
   handle('dialog:saveFile', async (event, value, path, expected) => {
     const content = checkedContent(value)
     const fileAccess = access(event)

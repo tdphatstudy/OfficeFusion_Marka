@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { useUIStore } from '@/stores/uiStore'
 import { useEditorStore } from '@/stores/editorStore'
+import { writingFonts } from '../../../shared/fonts'
 
 export const SettingsDialog: FC = () => {
   const open = useUIStore(state => state.settingsOpen)
@@ -58,6 +59,17 @@ export const SettingsDialog: FC = () => {
                 <option value="mono">Monospace</option>
               </select>
             </label>
+            <p className="text-xs text-text-secondary">
+              Font fallback supports Vietnamese, Chinese, Japanese and Korean when those fonts are
+              installed on your system.
+            </p>
+            <p
+              className="rounded border border-border bg-surface p-3 text-base leading-relaxed"
+              aria-label="Writing font preview"
+              style={{ fontFamily: writingFonts[config.fontFamily] }}
+            >
+              Tiếng Việt · 中文 · 日本語 · 한국어
+            </p>
             <label className="settings-row">
               Font size{' '}
               <span className="flex items-center gap-2">

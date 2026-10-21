@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core'
+import { chooseLocalImage } from '@/lib/localImages'
 import {
   type LucideIcon,
   Heading1,
@@ -179,19 +180,16 @@ export const slashCommands: CommandItem[] = [
     }
   },
   {
-    title: 'Image Sample',
-    description: 'Insert an image placeholder',
+    title: 'Local Image',
+    description: 'Choose an image and keep it with this document',
     icon: ImageIcon,
     keywords: ['image', 'photo', 'picture', 'img'],
     command: (editor: Editor): void => {
-      editor
-        .chain()
-        .focus()
-        .setImage({
-          src: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop',
-          alt: 'Placeholder Image'
-        })
-        .run()
+      void chooseLocalImage().then(path => {
+        if (path && !editor.isDestroyed) {
+          editor.chain().focus().setImage({ src: path, alt: 'Image' }).run()
+        }
+      })
     }
   },
   {

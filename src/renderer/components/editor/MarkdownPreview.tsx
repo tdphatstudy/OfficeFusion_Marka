@@ -4,6 +4,8 @@ import 'katex/dist/katex.min.css'
 import { createLatestTask } from '@/lib/latestTask'
 import { changeViewMode } from '@/lib/commands'
 import { previewCharacters } from '../../../shared/documents'
+import { loadLocalImage } from '@/lib/localImages'
+import { writingFonts } from '../../../shared/fonts'
 
 interface PreviewResult {
   id: number
@@ -13,6 +15,9 @@ interface PreviewResult {
 
 export const MarkdownPreview: FC = () => {
   const content = useEditorStore(state => state.content)
+  const location = useEditorStore(state => state.fileLocation)
+  const documentId = useEditorStore(state => state.documentId)
+  const fontFamily = useEditorStore(state => state.config.fontFamily)
   const [result, setResult] = useState<PreviewResult>({ id: 0, html: '', error: false })
   const queue = useRef<ReturnType<
     typeof createLatestTask<{ id: number; content: string }, PreviewResult>
@@ -21,6 +26,53 @@ export const MarkdownPreview: FC = () => {
   const [follow, setFollow] = useState(false)
   const requestId = useRef(0)
   const preview = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const container = preview.current
+    if (!container || result.error || !result.html) {
+      return
+    }
+    const images = [...container.querySelectorAll<HTMLImageElement>('img[data-markdown-src]')]
+    const observer = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || !(entry.target instanceof HTMLImageElement)) {
+            continue
+          }
+          observer.unobserve(entry.target)
+          const image = entry.target
+          const reference = image.dataset.markdownSrc
+          if (!reference || location?.kind !== 'local') {
+            image.replaceWith(
+              Object.assign(document.createElement('span'), {
+                textContent: 'Image unavailable: save locally to load images.'
+              })
+            )
+            continue
+          }
+          void loadLocalImage(documentId, location.path, reference)
+            .then(url => {
+              if (image.isConnected) {
+                image.src = url
+              }
+            })
+            .catch(() => {
+              if (image.isConnected) {
+                image.replaceWith(
+                  Object.assign(document.createElement('span'), {
+                    textContent: `Image unavailable: ${reference}`
+                  })
+                )
+              }
+            })
+        }
+      },
+      { root: container.parentElement, rootMargin: '300px' }
+    )
+    for (const image of images) {
+      observer.observe(image)
+    }
+    return () => observer.disconnect()
+  }, [result.html, result.error, location, documentId])
   useEffect(() => {
     let reusable: Worker | null = null
     const instance = createLatestTask<{ id: number; content: string }, PreviewResult>(
@@ -184,6 +236,7 @@ export const MarkdownPreview: FC = () => {
           <article
             ref={preview}
             className="markdown-preview prose dark:prose-invert mx-auto max-w-3xl text-text-primary"
+            style={{ fontFamily: writingFonts[fontFamily] }}
             dangerouslySetInnerHTML={{ __html: result.html }}
           />
         )}

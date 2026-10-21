@@ -7,6 +7,7 @@ Windows with Electron 44.9.0. Limits favor a responsive editor and recoverable d
 | --------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Editable text, native/SSH/URL     | 5 MiB UTF-8; reject binary/invalid encoding                                                          |
 | Larger local, WSL or mounted file | Read-only viewer up to 10 GiB; 64 KiB byte ranges                                                    |
+| Local document images             | PNG/JPEG/GIF/WebP, 8 MiB and 32 megapixels each; document-folder scope and no symlink traversal      |
 | Write mode                        | 100,000 characters; embedded/HTML image sources stay in Markdown                                     |
 | Preview                           | 256 Ki characters; lines at most 16,384 characters                                                   |
 | Export input                      | 512 KiB UTF-8; PDF/HTML render lines at most 16,384 characters                                       |
@@ -24,6 +25,11 @@ available. Full search, editing and export are unavailable in the large-file vie
 handle codepoint boundaries and short reads; a file change invalidates the view. The 10 GiB offset
 boundary is tested using a bounded mock reader, not a real 10 GiB allocation or a hardware/RSS
 claim.
+
+For editable source above 256 KiB, CodeMirror drops Markdown syntax parsing and publishes the full
+buffer less often while maintaining immediate editor changes. The 5 MiB UTF-8 edit limit still
+applies. The native smoke test edits a generated 2.4 MiB multilingual document; this is not a
+hardware benchmark for all devices or for files above the edit limit.
 
 ## Save and conflicting writers
 
@@ -64,10 +70,14 @@ requires a registered application window, the exact application document URL and
 benign URL fragments are ignored. Native file grants, page handles, key-picker grants and operation
 generations belong to their window; late operations cannot regain authorization after reload or
 cross-document navigation. There is no arbitrary read-file API. Permissions/downloads are denied.
-CSP blocks frames, objects and external document images. Raw Markdown is sanitized before trusted
-math/highlight transforms; KaTeX uses trust=false with finite size/expansion limits. PDF uses a
-separate sandboxed, script-disabled, temporary session with no preload or network access. Print
-windows and workers are cleaned up on success/error/deadline.
+CSP blocks frames, objects and external document images. Relative images in opened local documents
+are read through the per-window file grant from the document folder only; image bytes and pixel
+dimensions are bounded, format checked and loaded on demand. Insert Image uses an explicit native
+picker and copies the selected image to `assets/` beside the document. SVG and remote image URLs are
+not loaded. Raw Markdown is sanitized before trusted math/highlight transforms; KaTeX uses
+trust=false with finite size/expansion limits. PDF uses a separate sandboxed, script-disabled,
+temporary session with no preload or network access. Print windows and workers are cleaned up on
+success/error/deadline.
 
 Recovery uses IndexedDB structured records, not synchronous full-document localStorage snapshots.
 Normal close awaits a checkpoint. Other sessions' drafts remain separate; deleting this session's

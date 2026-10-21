@@ -1,5 +1,5 @@
 import { useEffect, type FC } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -19,9 +19,11 @@ import { useEditorStore } from '@/stores/editorStore'
 import { RichFind } from './RichFind'
 import { cn } from '@/lib/utils'
 import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
-import { Extension } from '@tiptap/core'
+import { Extension, mergeAttributes } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
 import { useUIStore } from '@/stores/uiStore'
+import { writingFonts } from '../../../shared/fonts'
+import { LocalImageView } from './LocalImageView'
 
 const richBudget = Extension.create({
   name: 'richBudget',
@@ -66,10 +68,20 @@ const richBudget = Extension.create({
   }
 })
 
+const LocalImage = Image.extend({
+  renderHTML({ HTMLAttributes }) {
+    const { src, ...safeAttributes } = HTMLAttributes
+    return [
+      'img',
+      mergeAttributes(this.options.HTMLAttributes, safeAttributes, { 'data-markdown-src': src })
+    ]
+  },
+  addNodeView: () => ReactNodeViewRenderer(LocalImageView)
+})
+
 export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
   const content = useEditorStore(state => state.content)
   const config = useEditorStore(state => state.config)
-  const fontFamilies = { mono: 'ui-monospace, monospace', prose: 'Georgia, serif', sans: 'inherit' }
 
   const editor = useEditor({
     extensions: [
@@ -107,7 +119,7 @@ export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
       TextAlign.configure({
         types: ['heading', 'paragraph']
       }),
-      Image.configure({
+      LocalImage.configure({
         inline: true,
         allowBase64: false
       }),
@@ -129,6 +141,16 @@ export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
       }
     }
   })
+
+  useEffect(() => {
+    const insert = (event: Event): void => {
+      if (active && event instanceof CustomEvent && typeof event.detail === 'string') {
+        editor?.chain().focus().setImage({ src: event.detail, alt: 'Image' }).run()
+      }
+    }
+    window.addEventListener('marka:insert-image', insert)
+    return () => window.removeEventListener('marka:insert-image', insert)
+  }, [editor, active])
 
   useEffect(() => {
     if (!editor || !active) {
@@ -219,7 +241,7 @@ export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
             style={{
               fontSize: config.fontSize,
               lineHeight: config.lineHeight,
-              fontFamily: fontFamilies[config.fontFamily]
+              fontFamily: writingFonts[config.fontFamily]
             }}
           />
         </div>

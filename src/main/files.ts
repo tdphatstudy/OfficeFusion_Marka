@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { open, lstat, rename, unlink, chmod, type FileHandle } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { preservePermissions, usesWindowsAcl } from './filePermissions'
+import { importDocumentImage, readDocumentImage } from './imageAssets'
 import {
   editableBytes,
   maximumViewerBytes,
@@ -308,6 +309,10 @@ export class FileAccess {
     return this.epoch
   }
 
+  hasGrant(path: string): boolean {
+    return this.grants.has(path)
+  }
+
   private assertGeneration(epoch: number): void {
     if (epoch !== this.epoch) {
       throw new Error('File access expired. Reopen the file.')
@@ -319,6 +324,26 @@ export class FileAccess {
       this.grants.clear()
     }
     this.grants.set(path, grant)
+  }
+
+  async image(path: string, reference: string): Promise<string> {
+    if (!this.grants.has(path)) {
+      throw new Error('Open the document again to load its images.')
+    }
+    const epoch = this.epoch
+    const result = await readDocumentImage(path, reference)
+    this.assertGeneration(epoch)
+    return result
+  }
+
+  async importImage(path: string, pickedPath: string): Promise<string> {
+    if (!this.grants.has(path)) {
+      throw new Error('Save or reopen the document before inserting a local image.')
+    }
+    const epoch = this.epoch
+    const result = await importDocumentImage(path, pickedPath)
+    this.assertGeneration(epoch)
+    return result
   }
 
   async open(path: string): Promise<OpenedFile> {

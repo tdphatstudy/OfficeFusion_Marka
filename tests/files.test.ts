@@ -22,6 +22,12 @@ import { EditorState } from '@codemirror/state'
 import { editBudget } from '../src/renderer/lib/editBudget'
 import { createCheckpoint } from '../src/renderer/lib/checkpoint'
 import { runProcess } from '../src/main/connections/process'
+import {
+  imageMime,
+  imageDimensions,
+  importDocumentImage,
+  relativeImagePath
+} from '../src/main/imageAssets'
 
 async function fixture(action: (directory: string, path: string) => Promise<void>): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), 'marka-files-'))
@@ -37,6 +43,85 @@ test('local decoder rejects binary and invalid UTF-8 without replacement', () =>
   assert.throws(() => decodeText(Buffer.from([0xff, 0xfe])), /UTF-8/)
   assert.throws(() => decodeText(Buffer.from('a\0b')), /Binary/)
   assert.equal(decodeText(Buffer.from('\uFEFFĐúng UTF-8')), '\uFEFFĐúng UTF-8')
+})
+
+test('local images import beside the document and require an open grant to load', async () =>
+  fixture(async (directory, path) => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=',
+      'base64'
+    )
+    const selected = join(directory, 'Tiếng Việt 图片.png')
+    await writeFile(path, '# Images')
+    await writeFile(selected, png)
+    const access = new FileAccess()
+    await assert.rejects(() => access.importImage(path, selected), /Save or reopen/)
+    await access.open(path)
+    const reference = await access.importImage(path, selected)
+    assert.match(reference, /^assets\/Tiếng-Việt-图片-[a-f0-9]{8}\.png$/u)
+    assert.deepEqual(await readFile(join(directory, reference)), png)
+    assert.equal(
+      await access.image(path, reference),
+      `data:image/png;base64,${png.toString('base64')}`
+    )
+    await access.dispose()
+    await assert.rejects(() => access.image(path, reference), /Open the document/)
+  }))
+
+test('image paths stay within document folder and reject external or unsupported data', async () =>
+  fixture(async (directory, path) => {
+    assert.equal(imageMime(Buffer.from('<svg onload="alert(1)"/>')), null)
+    for (const reference of [
+      '../secret.png',
+      '%2e%2e/secret.png',
+      'https://example.com/a.png',
+      'data:image/png;base64,x',
+      '/absolute.png',
+      'assets/a.png?x=1'
+    ]) {
+      assert.throws(() => relativeImagePath(path, reference))
+    }
+    const source = join(directory, 'fake.png')
+    await writeFile(source, Buffer.from('<svg/>'))
+    await writeFile(path, '# Images')
+    const access = new FileAccess()
+    await access.open(path)
+    await assert.rejects(() => access.importImage(path, source), /PNG, JPEG, GIF or WebP/)
+    await assert.rejects(() => access.image(path, 'fake.png'), /PNG, JPEG, GIF or WebP/)
+  }))
+
+test('compressed images with oversized pixel dimensions are rejected before display', async () =>
+  fixture(async (directory, path) => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=',
+      'base64'
+    )
+    png.writeUInt32BE(20_000, 16)
+    const source = join(directory, 'oversized.png')
+    await writeFile(source, png)
+    await writeFile(path, '# Image')
+    assert.deepEqual(imageDimensions(png, 'image/png'), { width: 20_000, height: 1 })
+    const access = new FileAccess()
+    await access.open(path)
+    await assert.rejects(() => access.importImage(path, source), /dimensions/)
+    await assert.rejects(() => access.image(path, 'oversized.png'), /dimensions/)
+  }))
+
+test('image dimensions are read from PNG, JPEG, GIF and WebP headers', () => {
+  const jpeg = Buffer.from([
+    255, 216, 255, 224, 0, 4, 0, 0, 255, 192, 0, 11, 8, 0, 2, 0, 3, 1, 1, 17, 0
+  ])
+  const gif = Buffer.from([71, 73, 70, 56, 57, 97, 3, 0, 2, 0])
+  const webp = Buffer.alloc(30)
+  webp.write('RIFF', 0)
+  webp.write('WEBP', 8)
+  webp.write('VP8X', 12)
+  webp[24] = 2
+  webp[27] = 1
+  assert.deepEqual(imageDimensions(jpeg, 'image/jpeg'), { width: 3, height: 2 })
+  assert.deepEqual(imageDimensions(gif, 'image/gif'), { width: 3, height: 2 })
+  assert.deepEqual(imageDimensions(webp, 'image/webp'), { width: 3, height: 2 })
+  assert.equal(imageDimensions(Buffer.from([255, 216, 255]), 'image/jpeg'), null)
 })
 
 test('every editable payload applies a byte budget including multibyte text', () => {

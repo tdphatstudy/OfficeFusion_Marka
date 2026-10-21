@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FC } from 'react'
 import type { PagedDocument, DocumentPage } from '../../../shared/documents'
 import { searchRanges } from '@/lib/rangeSearch'
 import { useUIStore } from '@/stores/uiStore'
+import { writingFonts } from '../../../shared/fonts'
 
 interface PagedViewerProps {
   document: PagedDocument
@@ -216,6 +217,7 @@ export const PagedViewer: FC<PagedViewerProps> = ({ document }) => {
         <pre
           aria-label="File range"
           className="min-h-0 flex-1 overflow-auto whitespace-pre p-4 font-mono text-sm"
+          style={{ fontFamily: writingFonts.mono }}
         >
           {page?.text}
         </pre>

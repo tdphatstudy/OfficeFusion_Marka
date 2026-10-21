@@ -9,6 +9,8 @@ import type {
 import type { OpenedFile, DocumentPage } from '../../shared/documents'
 
 export interface ElectronAPI {
+  loadImage: (path: string, reference: string) => Promise<string>
+  insertImage: (path: string) => Promise<string | null>
   inspectDocument: (target: FileLocation, reload: boolean) => Promise<ConnectedDocument>
   startBrowser: (source: BrowserSource, auth?: SshCredentials) => Promise<BrowserSession | null>
   listFolder: (id: string, query: BrowserQuery) => Promise<BrowserPage>

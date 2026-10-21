@@ -193,6 +193,15 @@ test('unsupported image sources are guarded before rich parsing can drop them', 
   assert.ok(richModeLimitation('<img src="data:image/png;base64,fixture">'))
 })
 
+test('preview defers image requests while export retains ordinary relative image links', () => {
+  const markdown = '![Photo](assets/photo.png)'
+  const preview = renderMarkdown(markdown)
+  assert.match(preview, /data-markdown-src="assets\/photo.png"/)
+  assert.doesNotMatch(preview, /\ssrc=/)
+  const exported = renderMarkdown(markdown, 'mathml')
+  assert.match(exported, /src="assets\/photo.png"/)
+})
+
 test('reopening a case alias of the dirty file after Save reads the committed snapshot', async () => {
   let disk = 'Original'
   let refreshed = 0

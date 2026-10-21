@@ -10,6 +10,9 @@ import type {
 import type { OpenedFile, DocumentPage } from '../shared/documents'
 
 const api = {
+  loadImage: (path: string, reference: string): Promise<string> =>
+    ipcRenderer.invoke('image:load', path, reference),
+  insertImage: (path: string): Promise<string | null> => ipcRenderer.invoke('image:insert', path),
   inspectDocument: (target: FileLocation, reload: boolean): Promise<ConnectedDocument> =>
     ipcRenderer.invoke('document:inspect', target, reload),
   startBrowser: (source: BrowserSource, auth?: SshCredentials): Promise<BrowserSession | null> =>
