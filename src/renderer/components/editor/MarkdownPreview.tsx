@@ -6,6 +6,7 @@ import { changeViewMode } from '@/lib/commands'
 import { previewCharacters } from '../../../shared/documents'
 import { loadLocalImage } from '@/lib/localImages'
 import { writingFonts } from '../../../shared/fonts'
+import { imageUrl } from '@/lib/remoteImages'
 
 interface PreviewResult {
   id: number
@@ -41,6 +42,19 @@ export const MarkdownPreview: FC = () => {
           observer.unobserve(entry.target)
           const image = entry.target
           const reference = image.dataset.markdownSrc
+          const remote = reference && imageUrl(reference)
+          if (remote) {
+            image.referrerPolicy = 'no-referrer'
+            image.src = remote
+            image.onerror = () => {
+              image.replaceWith(
+                Object.assign(document.createElement('span'), {
+                  textContent: 'Remote image unavailable.'
+                })
+              )
+            }
+            continue
+          }
           if (!reference || location?.kind !== 'local') {
             image.replaceWith(
               Object.assign(document.createElement('span'), {

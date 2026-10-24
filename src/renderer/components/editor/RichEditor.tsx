@@ -3,7 +3,7 @@ import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
+import { TableHeader, TableCell } from '@tiptap/extension-table'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import Link from '@tiptap/extension-link'
@@ -24,6 +24,7 @@ import { Plugin } from '@tiptap/pm/state'
 import { useUIStore } from '@/stores/uiStore'
 import { writingFonts } from '../../../shared/fonts'
 import { LocalImageView } from './LocalImageView'
+import { ResizableTable, ResizableRow, beginRowResize } from './extensions/ResizableTable'
 
 const richBudget = Extension.create({
   name: 'richBudget',
@@ -100,10 +101,10 @@ export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
       Placeholder.configure({
         placeholder: "Type '/' for commands or start writing..."
       }),
-      Table.configure({
+      ResizableTable.configure({
         resizable: true
       }),
-      TableRow,
+      ResizableRow,
       TableHeader,
       TableCell,
       TaskList,
@@ -230,6 +231,11 @@ export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
       {editor && <RichFind editor={editor} active={active} />}
       <div className="writing-canvas relative flex flex-1 flex-col overflow-y-auto">
         <div
+          onMouseDownCapture={event => {
+            if (editor) {
+              beginRowResize(editor.view, event.nativeEvent)
+            }
+          }}
           className={cn(
             'writing-surface w-full flex-1',
             config.fullWidth ? 'writing-surface-wide' : 'mx-auto'

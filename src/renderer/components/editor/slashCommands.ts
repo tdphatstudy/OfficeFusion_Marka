@@ -1,5 +1,4 @@
 import type { Editor } from '@tiptap/core'
-import { chooseLocalImage } from '@/lib/localImages'
 import {
   type LucideIcon,
   Heading1,
@@ -109,11 +108,12 @@ export const slashCommands: CommandItem[] = [
   },
   {
     title: 'Table',
-    description: 'Insert a 3x3 interactive table',
+    description: 'Choose rows and columns for a table',
     icon: TableIcon,
     keywords: ['table', 'grid', 'columns', 'rows'],
     command: (editor: Editor): void => {
-      editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+      editor.chain().focus().run()
+      window.dispatchEvent(new Event('marka:open-table-picker'))
     }
   },
   {
@@ -180,16 +180,13 @@ export const slashCommands: CommandItem[] = [
     }
   },
   {
-    title: 'Local Image',
-    description: 'Choose an image and keep it with this document',
+    title: 'Image',
+    description: 'Search public images and GIFs or choose a local file',
     icon: ImageIcon,
     keywords: ['image', 'photo', 'picture', 'img'],
     command: (editor: Editor): void => {
-      void chooseLocalImage().then(path => {
-        if (path && !editor.isDestroyed) {
-          editor.chain().focus().setImage({ src: path, alt: 'Image' }).run()
-        }
-      })
+      editor.chain().focus().run()
+      window.dispatchEvent(new Event('marka:open-image-picker'))
     }
   },
   {

@@ -256,10 +256,54 @@ try {
     'base64'
   )
   await writeFile(image, png)
+  await page.route('https://commons.wikimedia.org/w/api.php?**', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({
+        query: {
+          pages: [
+            {
+              title: 'File:Sample.png',
+              imageinfo: [
+                {
+                  mime: 'image/png',
+                  url: 'https://upload.wikimedia.org/sample.png',
+                  thumburl: 'https://upload.wikimedia.org/thumb.png',
+                  descriptionurl: 'https://commons.wikimedia.org/wiki/File:Sample.png'
+                }
+              ]
+            }
+          ]
+        }
+      })
+    })
+  )
+  await page.route('https://upload.wikimedia.org/**', route =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: png })
+  )
+  await page.getByRole('button', { name: 'Insert image' }).click()
+  await page.getByRole('textbox', { name: 'Search public images' }).fill('sample')
+  await page.getByTitle('Insert Sample.png').waitFor()
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'image-picker.png') })
+  await page.getByTitle('Insert Sample.png').click()
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('upload.wikimedia.org/sample.png')
+  )
+  await page.getByRole('button', { name: 'Split', exact: true }).click()
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.markdown-preview img')].some(
+      image => image instanceof HTMLImageElement && image.naturalWidth === 1
+    )
+  )
+  await page.getByRole('button', { name: 'Markdown', exact: true }).click()
+  passed('Public image search inserts a portable HTTPS reference and displays it')
   await app.evaluate(({ dialog }, filePath) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
   }, image)
-  await page.getByRole('button', { name: 'Insert local image' }).click()
+  await page.getByRole('button', { name: 'Insert image' }).click()
+  await page.getByRole('button', { name: 'Local file' }).click()
   await page.waitForFunction(() =>
     document.querySelector('.cm-content')?.textContent?.includes('![Image](assets/')
   )
@@ -402,6 +446,42 @@ try {
   await page.screenshot({ animations: 'disabled', path: resolve(root, 'writing-dark.png') })
   await page.getByRole('button', { name: 'Switch to Light mode', exact: true }).click()
   await page.screenshot({ animations: 'disabled', path: resolve(root, 'writing-light.png') })
+  await page.locator('.tiptap').click()
+  await page.keyboard.press('Control+End')
+  await page.keyboard.press('Enter')
+  await page.getByRole('button', { name: 'Insert table', exact: true }).click()
+  await page.getByRole('spinbutton', { name: 'Rows' }).fill('2')
+  await page.getByRole('spinbutton', { name: 'Columns' }).fill('4')
+  await page.screenshot({ animations: 'disabled', path: resolve(root, 'table-picker.png') })
+  await page.getByRole('button', { name: 'Insert 2 × 4 table' }).click()
+  const customTable = page.locator('.tiptap table').last()
+  assert.equal(await customTable.locator('tr').count(), 2)
+  assert.equal(await customTable.locator('tr').first().locator('th,td').count(), 4)
+  await customTable.locator('tr').first().locator('th').first().scrollIntoViewIfNeeded()
+  let firstCell = await customTable.locator('tr').first().locator('th').first().boundingBox()
+  assert.ok(firstCell)
+  await page.mouse.move(firstCell.x + firstCell.width - 2, firstCell.y + firstCell.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(firstCell.x + firstCell.width + 50, firstCell.y + firstCell.height / 2)
+  await page.mouse.up()
+  const widerCell = await customTable.locator('tr').first().locator('th').first().boundingBox()
+  assert.ok(widerCell && widerCell.width > firstCell.width + 20)
+  firstCell = widerCell
+  await page.mouse.move(firstCell.x + firstCell.width / 2, firstCell.y + firstCell.height - 2)
+  await page.mouse.down()
+  await page.mouse.move(firstCell.x + firstCell.width / 2, firstCell.y + firstCell.height + 40)
+  await page.mouse.up()
+  await page.getByRole('button', { name: 'Markdown', exact: true }).click()
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('height:')
+  )
+  await page.getByRole('button', { name: 'Write', exact: true }).click()
+  assert.ok(
+    (
+      await page.locator('.tiptap table').last().locator('tr').first().getAttribute('style')
+    )?.includes('height:')
+  )
+  passed('Custom table dimensions and row-height drag survive Markdown round trip')
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0].setSize(800, 600)
   })

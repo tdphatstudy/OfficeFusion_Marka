@@ -25,6 +25,7 @@ const result = spawnSync(
   process.execPath,
   [
     '--test',
+    '--test-concurrency=1',
     ...suites.map(name => resolve(`tmp/tests/${name}.test.mjs`))
   ],
   {

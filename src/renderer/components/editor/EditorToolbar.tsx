@@ -2,8 +2,9 @@ import { useRef, type FC } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useEditorState } from '@tiptap/react'
 import * as Menu from '@radix-ui/react-dropdown-menu'
-import { Bold, Italic, List, Table as TableIcon, ChevronDown, MoreHorizontal } from 'lucide-react'
+import { Bold, Italic, List, ChevronDown, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TablePicker } from './TablePicker'
 
 interface EditorToolbarProps {
   editor: Editor | null
@@ -100,10 +101,6 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
       run: () => editor.chain().focus().toggleTaskList().run(),
       active: editor.isActive('taskList')
     },
-    {
-      label: 'Insert Table (3x3)',
-      run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-    },
     { label: 'Insert Callout Box', run: () => editor.chain().focus().setCallout().run() },
     {
       label: 'Code Block',
@@ -197,17 +194,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
       >
         <List size={16} />
       </button>
-      <button
-        type="button"
-        className="toolbar-button format-secondary"
-        aria-label="Insert Table (3x3)"
-        title="Insert Table (3x3)"
-        onClick={() =>
-          editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-        }
-      >
-        <TableIcon size={15} />
-      </button>
+      <TablePicker editor={editor} />
       <Menu.Root
         onOpenChange={open => {
           if (open) {
@@ -250,6 +237,33 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
               ))}
               <Menu.Separator className="menu-separator" />
             </div>
+            {editor.isActive('table') && (
+              <>
+                <Menu.Label className="px-3 py-1 text-[11px] text-text-muted">Table</Menu.Label>
+                {[
+                  { label: 'Add row below', run: () => editor.chain().focus().addRowAfter().run() },
+                  {
+                    label: 'Add column after',
+                    run: () => editor.chain().focus().addColumnAfter().run()
+                  },
+                  { label: 'Delete row', run: () => editor.chain().focus().deleteRow().run() },
+                  {
+                    label: 'Delete column',
+                    run: () => editor.chain().focus().deleteColumn().run()
+                  },
+                  { label: 'Delete table', run: () => editor.chain().focus().deleteTable().run() }
+                ].map(item => (
+                  <Menu.Item
+                    key={item.label}
+                    className="menu-item"
+                    onSelect={() => applyAction(item.run)}
+                  >
+                    {item.label}
+                  </Menu.Item>
+                ))}
+                <Menu.Separator className="menu-separator" />
+              </>
+            )}
             {actions.map(action =>
               action.active !== undefined ? (
                 <Menu.CheckboxItem

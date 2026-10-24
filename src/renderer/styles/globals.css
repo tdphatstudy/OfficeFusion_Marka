@@ -109,9 +109,30 @@ ul[data-type='taskList'] li > div {
 .tiptap table {
   border-collapse: collapse;
   margin: 1rem 0;
-  overflow: hidden;
+  overflow: visible;
   table-layout: fixed;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
+}
+
+.tiptap .tableWrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.tiptap .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background: hsl(var(--color-accent));
+  pointer-events: none;
+}
+
+.tiptap.resize-cursor,
+.tiptap .resize-cursor {
+  cursor: col-resize;
 }
 
 .tiptap table td,
@@ -122,6 +143,18 @@ ul[data-type='taskList'] li > div {
   padding: 6px 8px;
   position: relative;
   vertical-align: top;
+}
+
+.tiptap table td:hover::after,
+.tiptap table th:hover::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 6px;
+  cursor: row-resize;
+  background: hsl(var(--color-accent) / 0.4);
 }
 
 .tiptap table th {

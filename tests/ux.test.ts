@@ -8,6 +8,34 @@ import { FileBrowser, checkedBrowserQuery, withinRoot } from '../src/main/browse
 import { FileAccess, readTextRange } from '../src/main/files'
 import { findRichText } from '../src/renderer/lib/richSearch'
 import { searchRanges } from '../src/renderer/lib/rangeSearch'
+import { commonsImages, imageUrl } from '../src/renderer/lib/remoteImages'
+
+test('public image results keep only safe direct image URLs and source pages', () => {
+  const valid = {
+    title: 'File:Example.gif',
+    imageinfo: [
+      {
+        mime: 'image/gif',
+        url: 'https://upload.wikimedia.org/a.gif',
+        thumburl: 'https://upload.wikimedia.org/preview.gif',
+        descriptionurl: 'https://commons.wikimedia.org/wiki/File:Example.gif'
+      }
+    ]
+  }
+  const invalid = {
+    ...valid,
+    title: 'File:Bad.gif',
+    imageinfo: [{ ...valid.imageinfo[0], url: 'http://127.0.0.1/private.gif' }]
+  }
+  assert.deepEqual(
+    commonsImages({ query: { pages: [valid, invalid] } }).map(item => item.title),
+    ['Example.gif']
+  )
+  assert.equal(imageUrl('javascript:alert(1)'), null)
+  assert.equal(imageUrl('file:///secret.png'), null)
+  assert.equal(imageUrl('https://user:pass@example.com/image.png'), null)
+  assert.equal(imageUrl(' https://example.com/image.png '), 'https://example.com/image.png')
+})
 
 const query = { path: '', filter: '', hidden: false, markdownOnly: true, offset: 0 }
 

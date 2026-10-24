@@ -29,6 +29,9 @@ const previewSchema: SanitizeOptions = {
       ['dataType', 'callout'],
       ['dataCalloutType', 'info', 'warning', 'tip', 'danger']
     ],
+    tr: [['style', /^height:\s*(?:[2-9]\d|[1-5]\d\d|600)px;?$/i]],
+    td: [['colwidth', /^(?:[2-9]\d|[1-9]\d{2,3})(?:,(?:[2-9]\d|[1-9]\d{2,3}))*$/]],
+    th: [['colwidth', /^(?:[2-9]\d|[1-9]\d{2,3})(?:,(?:[2-9]\d|[1-9]\d{2,3}))*$/]],
     '*': [
       ...(defaultSchema.attributes?.['*'] ?? []),
       ['style', /^text-align:\s*(left|center|right|justify);?$/i]
@@ -42,6 +45,15 @@ function headingPositions(): (tree: HtmlNode) => void {
     const visit = (node: HtmlNode, depth = 0): void => {
       if (++nodes > 20_000 || depth > 100) {
         throw new Error('Document is too complex to preview. Use Markdown mode.')
+      }
+      if (node.tagName === 'td' || node.tagName === 'th') {
+        const width = node.properties?.colwidth
+        if (typeof width === 'string' && /^\d{2,4}(?:,\d{2,4})*$/.test(width)) {
+          const total = width.split(',').reduce((sum, item) => sum + Number(item), 0)
+          if (total >= 25 && total <= 20_000) {
+            node.properties = { ...node.properties, style: `width: ${total}px` }
+          }
+        }
       }
       if (
         node.tagName &&

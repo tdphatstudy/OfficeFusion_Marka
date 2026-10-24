@@ -1,12 +1,12 @@
 import type { FC, ReactNode } from 'react'
 import * as Menu from '@radix-ui/react-dropdown-menu'
-import { PanelLeft, Search, Focus, MoreHorizontal, Image as ImageIcon } from 'lucide-react'
+import { PanelLeft, Search, Focus, MoreHorizontal } from 'lucide-react'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUIStore } from '@/stores/uiStore'
 import { changeViewMode, findInDocument, richModeLimitation } from '@/lib/commands'
 import { cn } from '@/lib/utils'
 import { useCompactLayout } from '@/hooks/useCompactLayout'
-import { chooseLocalImage } from '@/lib/localImages'
+import { ImagePicker } from '@/components/editor/ImagePicker'
 
 interface DocumentToolbarProps {
   children?: ReactNode
@@ -64,21 +64,7 @@ export const DocumentToolbar: FC<DocumentToolbarProps> = ({ children }) => {
       )}
       <div className="min-w-0 flex-1" />
       <div className="flex shrink-0 items-center gap-1">
-        <button
-          type="button"
-          className="toolbar-button"
-          aria-label="Insert local image"
-          title="Insert local image"
-          onClick={() => {
-            void chooseLocalImage().then(path => {
-              if (path) {
-                window.dispatchEvent(new CustomEvent('marka:insert-image', { detail: path }))
-              }
-            })
-          }}
-        >
-          <ImageIcon size={16} />
-        </button>
+        <ImagePicker />
         <button
           type="button"
           className="toolbar-button"
