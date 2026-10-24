@@ -7,6 +7,7 @@ import {
   resizeImageMarkup,
   searchCommons,
   searchOpenverse,
+  searchTopMemes,
   type RemoteImageResult
 } from '@/lib/remoteImages'
 import { useEditorStore } from '@/stores/editorStore'
@@ -70,7 +71,7 @@ const DocumentThumbnail: FC<{ source: string }> = ({ source }) => {
 export const ImagePicker: FC = () => {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [mode, setMode] = useState<'images' | 'gifs'>('images')
+  const [mode, setMode] = useState<'images' | 'gifs' | 'memes'>('images')
   const [tab, setTab] = useState<'search' | 'document'>('search')
   const [provider, setProvider] = useState<'Openverse' | 'Wikimedia Commons'>('Openverse')
   const [panelWidth, setPanelWidth] = useState(400)
@@ -92,7 +93,7 @@ export const ImagePicker: FC = () => {
   useEffect(() => {
     setResults([])
     setSelected(null)
-    if (!open || tab !== 'search' || !query.trim()) {
+    if (!open || tab !== 'search' || (mode !== 'memes' && !query.trim())) {
       setBusy(false)
       setError('')
       return
@@ -101,14 +102,18 @@ export const ImagePicker: FC = () => {
     setBusy(true)
     setError('')
     const timer = setTimeout(() => {
-      void (
-        provider === 'Openverse'
-          ? searchOpenverse(query, mode === 'gifs', controller.signal)
-          : searchCommons(
-              mode === 'gifs' ? `${query} filemime:"image/gif"` : query,
-              controller.signal
-            )
-      )
+      let request: Promise<RemoteImageResult[]>
+      if (mode === 'memes') {
+        request = searchTopMemes(query, controller.signal)
+      } else if (provider === 'Openverse') {
+        request = searchOpenverse(query, mode === 'gifs', controller.signal)
+      } else {
+        request = searchCommons(
+          mode === 'gifs' ? `${query} filemime:"image/gif"` : query,
+          controller.signal
+        )
+      }
+      void request
         .then(items =>
           setResults(mode === 'gifs' ? items.filter(item => item.mime === 'image/gif') : items)
         )
@@ -321,6 +326,15 @@ export const ImagePicker: FC = () => {
                 </button>
                 <button
                   type="button"
+                  className={
+                    mode === 'memes' ? 'secondary-action border-accent' : 'secondary-action'
+                  }
+                  onClick={() => setMode('memes')}
+                >
+                  Popular memes
+                </button>
+                <button
+                  type="button"
                   className="secondary-action"
                   onClick={() => {
                     void chooseLocalImage()
@@ -344,23 +358,34 @@ export const ImagePicker: FC = () => {
                 <input
                   className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none"
                   aria-label="Search public images"
-                  placeholder="Search photos, illustrations or GIFs"
+                  placeholder={
+                    mode === 'memes'
+                      ? 'Filter popular memes by name'
+                      : 'Search photos, illustrations or GIFs'
+                  }
                   value={query}
                   onChange={event => setQuery(event.target.value)}
                 />
               </label>
-              <label className="flex items-center gap-2 text-xs text-text-secondary">
-                Source{' '}
-                <select
-                  className="rounded border border-border bg-surface px-2 py-1 text-text-primary"
-                  aria-label="Image source"
-                  value={provider}
-                  onChange={event => setProvider(event.target.value as typeof provider)}
-                >
-                  <option>Openverse</option>
-                  <option>Wikimedia Commons</option>
-                </select>
-              </label>
+              {mode !== 'memes' ? (
+                <label className="flex items-center gap-2 text-xs text-text-secondary">
+                  Source{' '}
+                  <select
+                    className="rounded border border-border bg-surface px-2 py-1 text-text-primary"
+                    aria-label="Image source"
+                    value={provider}
+                    onChange={event => setProvider(event.target.value as typeof provider)}
+                  >
+                    <option>Openverse</option>
+                    <option>Wikimedia Commons</option>
+                  </select>
+                </label>
+              ) : (
+                <p className="text-xs text-text-secondary">
+                  Popular meme templates from Imgflip, free to browse without an API key. Search
+                  filters this list.
+                </p>
+              )}
               <div
                 className="flex min-h-24 flex-1 flex-wrap content-start gap-2 overflow-y-auto"
                 aria-busy={busy}
@@ -387,14 +412,16 @@ export const ImagePicker: FC = () => {
                     </button>
                   </div>
                 ))}
-                {!query && (
+                {!query && mode !== 'memes' && (
                   <p className="text-sm text-text-secondary">
                     Search public images or GIFs. Check each file’s license before sharing.
                   </p>
                 )}
-                {query && !busy && !error && results.length === 0 && (
+                {(query || mode === 'memes') && !busy && !error && results.length === 0 && (
                   <p className="text-sm text-text-secondary">
-                    No matching files. Try the other source or paste a direct link.
+                    {mode === 'memes'
+                      ? 'No popular meme matches. Try a shorter name or switch to Images.'
+                      : 'No matching files. Try the other source or paste a direct link.'}
                   </p>
                 )}
               </div>

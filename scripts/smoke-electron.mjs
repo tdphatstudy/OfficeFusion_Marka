@@ -279,6 +279,22 @@ try {
   await page.route('https://upload.wikimedia.org/**', route =>
     route.fulfill({ status: 200, contentType: 'image/png', body: png })
   )
+  await page.route('https://api.imgflip.com/get_memes?**', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({
+        success: true,
+        data: {
+          memes: [{ id: '123', name: 'Popular sample', url: 'https://i.imgflip.com/trend.jpg' }]
+        }
+      })
+    })
+  )
+  await page.route('https://i.imgflip.com/**', route =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: png })
+  )
   await page.getByRole('button', { name: 'Insert image' }).click()
   await page.getByRole('textbox', { name: 'Search public images' }).fill('trend sample')
   await page.getByTitle('Select Trend Sample.png').waitFor()
@@ -329,10 +345,20 @@ try {
     /width="240"/
   )
   passed('Public image search inserts a portable HTTPS reference and displays it')
+  await page.getByRole('button', { name: 'Insert image', exact: true }).click()
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await page.getByRole('button', { name: 'Popular memes' }).click()
+  await page.getByRole('textbox', { name: 'Search public images' }).fill('')
+  await page.getByTitle('Select Popular sample').waitFor()
+  await page.getByTitle('Select Popular sample').click()
+  await page.getByRole('button', { name: 'Insert image', exact: true }).last().click()
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('i.imgflip.com/trend.jpg')
+  )
+  passed('Popular meme browsing works without an API key')
   await app.evaluate(({ dialog }, filePath) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
   }, image)
-  await page.getByRole('button', { name: 'Insert image' }).click()
   await page.getByRole('button', { name: 'Local file' }).click()
   await page.waitForFunction(() =>
     document.querySelector('.cm-content')?.textContent?.includes('![Image](assets/')
@@ -342,13 +368,11 @@ try {
   assert.deepEqual(await readFile(resolve(root, imageReference)), png)
   await page.getByRole('button', { name: 'Split', exact: true }).click()
   await page.waitForFunction(() => {
-    const image = document.querySelector('.markdown-preview img')
-    return image instanceof HTMLImageElement && image.complete && image.naturalWidth === 1
+    return [...document.querySelectorAll('.markdown-preview img')].some(image => image instanceof HTMLImageElement && image.getAttribute('data-markdown-src')?.includes('assets/') && image.complete && image.naturalWidth === 1)
   })
   await page.getByRole('button', { name: 'Write', exact: true }).click()
   await page.waitForFunction(() => {
-    const image = document.querySelector('.tiptap .node-image img')
-    return image instanceof HTMLImageElement && image.complete && image.naturalWidth === 1
+    return [...document.querySelectorAll('.tiptap .node-image img')].some(image => image instanceof HTMLImageElement && image.src.startsWith('data:') && image.complete && image.naturalWidth === 1)
   })
   passed('Local image picker copies an image and displays it in Split and Write')
   await page.getByRole('button', { name: 'Markdown', exact: true }).click()
@@ -484,7 +508,7 @@ try {
   await page.getByRole('spinbutton', { name: 'Columns' }).fill('4')
   await page.screenshot({ animations: 'disabled', path: resolve(root, 'table-picker.png') })
   await page.getByRole('button', { name: 'Insert 2 × 4 table' }).click()
-  const customTable = page.locator('.tiptap table').last()
+  const customTable = page.locator('.tiptap table').filter({ has: page.locator('tr:first-child > :nth-child(4)') }).last()
   assert.equal(await customTable.locator('tr').count(), 2)
   assert.equal(await customTable.locator('tr').first().locator('th,td').count(), 4)
   await customTable.locator('tr').first().locator('th').first().scrollIntoViewIfNeeded()

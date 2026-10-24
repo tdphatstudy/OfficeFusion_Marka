@@ -8,7 +8,7 @@ export interface RemoteImageResult {
   thumbnail: string
   page: string
   mime: string
-  source: 'Openverse' | 'Wikimedia Commons'
+  source: 'Openverse' | 'Wikimedia Commons' | 'Imgflip'
   creator?: string
   license?: string
 }
@@ -171,6 +171,70 @@ export function openverseImages(value: unknown): RemoteImageResult[] {
       }
     ]
   })
+}
+
+const memeMimes: Record<string, string> = {
+  png: 'image/png',
+  webp: 'image/webp',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg'
+}
+
+export function imgflipMemes(value: unknown): RemoteImageResult[] {
+  const memes = (value as { data?: { memes?: unknown } } | null)?.data?.memes
+  if (!Array.isArray(memes)) {
+    return []
+  }
+  return memes.flatMap(item => {
+    const id = String(item?.id ?? '')
+    const url = imageUrl(item?.url ?? '')
+    if (
+      !/^\d{1,20}$/.test(id) ||
+      !url ||
+      new URL(url).hostname !== 'i.imgflip.com' ||
+      !/\.(?:png|jpe?g|webp)$/i.test(new URL(url).pathname) ||
+      typeof item?.name !== 'string'
+    ) {
+      return []
+    }
+    const extension = new URL(url).pathname.split('.').pop()?.toLowerCase()
+    const mime = memeMimes[extension ?? ''] ?? 'image/jpeg'
+    return [
+      {
+        title: item.name.slice(0, 200),
+        url,
+        thumbnail: url,
+        page: `https://imgflip.com/memegenerator/${id}`,
+        mime,
+        source: 'Imgflip' as const
+      }
+    ]
+  })
+}
+
+let cachedTopMemes: { expires: number; items: RemoteImageResult[] } | null = null
+
+export async function searchTopMemes(
+  query: string,
+  signal?: AbortSignal
+): Promise<RemoteImageResult[]> {
+  if (!cachedTopMemes || cachedTopMemes.expires < Date.now()) {
+    const response = await fetch('https://api.imgflip.com/get_memes?type=image', {
+      signal,
+      referrerPolicy: 'no-referrer'
+    })
+    if (!response.ok) {
+      throw new Error(`Imgflip returned ${response.status}.`)
+    }
+    cachedTopMemes = {
+      expires: Date.now() + 5 * 60_000,
+      items: imgflipMemes(await response.json())
+    }
+  }
+  const term = query.trim().toLocaleLowerCase()
+  return term
+    ? cachedTopMemes.items.filter(item => item.title.toLocaleLowerCase().includes(term))
+    : cachedTopMemes.items
 }
 
 export async function searchOpenverse(
