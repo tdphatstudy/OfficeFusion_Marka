@@ -207,11 +207,28 @@ export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
       instance.focus()
     }
     window.addEventListener('marka:insert-image', insertImage)
+    const locateImage = (event: Event): void => {
+      if (
+        !activeEditor.current ||
+        !(event instanceof CustomEvent) ||
+        typeof event.detail?.from !== 'number'
+      ) {
+        return
+      }
+      const at = Math.min(instance.state.doc.length, Math.max(0, event.detail.from))
+      instance.dispatch({
+        selection: { anchor: at },
+        effects: EditorView.scrollIntoView(at, { y: 'center' })
+      })
+      instance.focus()
+    }
+    window.addEventListener('marka:locate-image', locateImage)
     return () => {
       clearTimeout(timer)
       unregisterFlush()
       window.removeEventListener('marka:navigate', navigate)
       window.removeEventListener('marka:insert-image', insertImage)
+      window.removeEventListener('marka:locate-image', locateImage)
       unsubscribeHistory()
       cancelAnimationFrame(scrollFrame)
       instance.scrollDOM.removeEventListener('scroll', scroll)

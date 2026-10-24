@@ -191,6 +191,19 @@ test('unsupported image sources are guarded before rich parsing can drop them', 
   assert.ok(richModeLimitation('![image](data:image/png;base64,fixture)'))
   assert.ok(richModeLimitation('![image](data&#58;image/png;base64,fixture)'))
   assert.ok(richModeLimitation('<img src="data:image/png;base64,fixture">'))
+  assert.equal(
+    richModeLimitation('<img src="https://example.com/a.png" alt="A" width="320">'),
+    null
+  )
+  assert.ok(richModeLimitation('<img src="javascript:alert(1)" alt="A" width="320">'))
+})
+
+test('resized image width survives preview without active HTML attributes', () => {
+  const html = renderMarkdown(
+    '<img src="https://example.com/a.png" alt="A" width="320" onerror="alert(1)">'
+  )
+  assert.match(html, /width="320"/)
+  assert.doesNotMatch(html, /onerror|alert\(1\)/)
 })
 
 test('preview defers image requests while export retains ordinary relative image links', () => {

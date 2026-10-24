@@ -24,6 +24,10 @@ const previewSchema: SanitizeOptions = {
   tagNames: [...(defaultSchema.tagNames ?? []), 'mark', 'u'],
   attributes: {
     ...defaultSchema.attributes,
+    img: [
+      ...(defaultSchema.attributes?.['img'] ?? []),
+      ['width', /^(?:[89]\d|[1-9]\d{2,3}|[12]\d{3})$/]
+    ],
     div: [
       ...(defaultSchema.attributes?.['div'] ?? []),
       ['dataType', 'callout'],

@@ -1,5 +1,5 @@
 import { useEffect, type FC } from 'react'
-import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react'
+import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -9,7 +9,6 @@ import TaskItem from '@tiptap/extension-task-item'
 import Link from '@tiptap/extension-link'
 import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
-import Image from '@tiptap/extension-image'
 import { CalloutExtension } from './extensions/CalloutExtension'
 import { SlashCommandExtension } from './extensions/SlashCommandExtension'
 import { BubbleMenu } from './BubbleMenu'
@@ -19,11 +18,11 @@ import { useEditorStore } from '@/stores/editorStore'
 import { RichFind } from './RichFind'
 import { cn } from '@/lib/utils'
 import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
-import { Extension, mergeAttributes } from '@tiptap/core'
+import { Extension } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
 import { useUIStore } from '@/stores/uiStore'
 import { writingFonts } from '../../../shared/fonts'
-import { LocalImageView } from './LocalImageView'
+import { ManagedImage } from './extensions/ManagedImage'
 import { ResizableTable, ResizableRow, beginRowResize } from './extensions/ResizableTable'
 
 const richBudget = Extension.create({
@@ -69,17 +68,6 @@ const richBudget = Extension.create({
   }
 })
 
-const LocalImage = Image.extend({
-  renderHTML({ HTMLAttributes }) {
-    const { src, ...safeAttributes } = HTMLAttributes
-    return [
-      'img',
-      mergeAttributes(this.options.HTMLAttributes, safeAttributes, { 'data-markdown-src': src })
-    ]
-  },
-  addNodeView: () => ReactNodeViewRenderer(LocalImageView)
-})
-
 export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
   const content = useEditorStore(state => state.content)
   const config = useEditorStore(state => state.config)
@@ -120,7 +108,7 @@ export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
       TextAlign.configure({
         types: ['heading', 'paragraph']
       }),
-      LocalImage.configure({
+      ManagedImage.configure({
         inline: true,
         allowBase64: false
       }),
@@ -221,6 +209,34 @@ export const RichEditor: FC<{ active?: boolean }> = ({ active = true }) => {
     return () => {
       window.removeEventListener('marka:navigate', navigate)
     }
+  }, [editor, active])
+
+  useEffect(() => {
+    const locate = (event: Event): void => {
+      if (
+        !active ||
+        !editor ||
+        !(event instanceof CustomEvent) ||
+        typeof event.detail?.index !== 'number'
+      ) {
+        return
+      }
+      let index = 0
+      let target = -1
+      editor.state.doc.descendants((node, position) => {
+        if (node.type.name === 'image' && index++ === event.detail.index) {
+          target = position
+        }
+      })
+      if (target >= 0) {
+        editor.chain().focus().setNodeSelection(target).run()
+        editor.view.dom
+          .querySelector('.managed-image-selected')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+    window.addEventListener('marka:locate-image', locate)
+    return () => window.removeEventListener('marka:locate-image', locate)
   }, [editor, active])
 
   return (

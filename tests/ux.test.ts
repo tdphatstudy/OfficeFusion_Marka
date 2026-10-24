@@ -8,7 +8,7 @@ import { FileBrowser, checkedBrowserQuery, withinRoot } from '../src/main/browse
 import { FileAccess, readTextRange } from '../src/main/files'
 import { findRichText } from '../src/renderer/lib/richSearch'
 import { searchRanges } from '../src/renderer/lib/rangeSearch'
-import { commonsImages, imageUrl } from '../src/renderer/lib/remoteImages'
+import { commonsImages, documentImages, imageUrl, openverseImages, resizeImageMarkup } from '../src/renderer/lib/remoteImages'
 
 test('public image results keep only safe direct image URLs and source pages', () => {
   const valid = {
@@ -35,6 +35,20 @@ test('public image results keep only safe direct image URLs and source pages', (
   assert.equal(imageUrl('file:///secret.png'), null)
   assert.equal(imageUrl('https://user:pass@example.com/image.png'), null)
   assert.equal(imageUrl(' https://example.com/image.png '), 'https://example.com/image.png')
+})
+
+test('Openverse results filter unsupported formats and unsafe URLs', () => {
+  const result = { title: 'Trend', url: 'https://example.com/trend.webp', thumbnail: 'https://example.com/thumb.webp', foreign_landing_url: 'https://example.com/license', filetype: 'webp', creator: 'Artist', license: 'cc-by' }
+  assert.deepEqual(openverseImages({ results: [result, { ...result, url: 'http://localhost/private.webp' }, { ...result, filetype: 'svg' }] }).map(item => item.title), ['Trend'])
+})
+
+test('image manager finds images outside code and safely resizes markup', () => {
+  const markdown = '![Cat](https://example.com/cat.png)\n\n```md\n![Ignored](bad)\n```\n\n<img src="https://example.com/dog.jpg" width="220" alt="Dog">'
+  const images = documentImages(markdown)
+  assert.equal(images.length, 2)
+  assert.equal(images[1].width, 220)
+  assert.match(resizeImageMarkup(markdown.slice(images[0].from, images[0].to), images[0], 320) ?? '', /width="320"/)
+  assert.equal(resizeImageMarkup('', images[0], 9000), null)
 })
 
 const query = { path: '', filter: '', hidden: false, markdownOnly: true, offset: 0 }

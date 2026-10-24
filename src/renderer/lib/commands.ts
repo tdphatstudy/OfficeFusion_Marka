@@ -8,7 +8,21 @@ export function richModeLimitation(content: string): string | null {
   if (content.length > 100_000) {
     return 'Large documents use Markdown or Split for faster editing.'
   }
-  if (/<img\b/i.test(content) || (/!\[/.test(content) && /data:|blob:|&#/i.test(content))) {
+  const supportedImagesRemoved = content.replace(
+    /<img\s+src="([^"]+)"\s+alt="([^"]*)"\s+width="(\d+)"\s*\/?\s*>/gi,
+    (markup, source: string, _alt: string, rawWidth: string) => {
+      const width = Number(rawWidth)
+      return width >= 80 &&
+        width <= 2400 &&
+        (/^https:\/\/[^\s<>"']+$/i.test(source) || /^assets\/[\w./%-]+$/i.test(source))
+        ? ''
+        : markup
+    }
+  )
+  if (
+    /<img\b/i.test(supportedImagesRemoved) ||
+    (/!\[/.test(content) && /data:|blob:|&#/i.test(content))
+  ) {
     return 'Embedded or HTML images stay in Markdown mode to preserve their source without decoding untrusted image data.'
   }
   if (

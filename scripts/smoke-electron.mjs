@@ -256,27 +256,23 @@ try {
     'base64'
   )
   await writeFile(image, png)
-  await page.route('https://commons.wikimedia.org/w/api.php?**', route =>
+  await page.route('https://api.openverse.org/v1/images/?**', route =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       headers: { 'access-control-allow-origin': '*' },
       body: JSON.stringify({
-        query: {
-          pages: [
-            {
-              title: 'File:Sample.png',
-              imageinfo: [
-                {
-                  mime: 'image/png',
-                  url: 'https://upload.wikimedia.org/sample.png',
-                  thumburl: 'https://upload.wikimedia.org/thumb.png',
-                  descriptionurl: 'https://commons.wikimedia.org/wiki/File:Sample.png'
-                }
-              ]
-            }
-          ]
-        }
+        results: [
+          {
+            title: 'Trend Sample.png',
+            filetype: 'png',
+            url: 'https://upload.wikimedia.org/sample.png',
+            thumbnail: 'https://upload.wikimedia.org/thumb.png',
+            foreign_landing_url: 'https://commons.wikimedia.org/wiki/File:Sample.png',
+            creator: 'Fixture',
+            license: 'cc0'
+          }
+        ]
       })
     })
   )
@@ -284,10 +280,11 @@ try {
     route.fulfill({ status: 200, contentType: 'image/png', body: png })
   )
   await page.getByRole('button', { name: 'Insert image' }).click()
-  await page.getByRole('textbox', { name: 'Search public images' }).fill('sample')
-  await page.getByTitle('Insert Sample.png').waitFor()
+  await page.getByRole('textbox', { name: 'Search public images' }).fill('trend sample')
+  await page.getByTitle('Select Trend Sample.png').waitFor()
   await page.screenshot({ animations: 'disabled', path: resolve(root, 'image-picker.png') })
-  await page.getByTitle('Insert Sample.png').click()
+  await page.getByTitle('Select Trend Sample.png').click()
+  await page.getByRole('button', { name: 'Insert image', exact: true }).last().click()
   await page.waitForFunction(() =>
     document.querySelector('.cm-content')?.textContent?.includes('upload.wikimedia.org/sample.png')
   )
@@ -298,6 +295,39 @@ try {
     )
   )
   await page.getByRole('button', { name: 'Markdown', exact: true }).click()
+  await page.getByRole('button', { name: /In document/ }).click()
+  await page.getByRole('spinbutton', { name: 'Width for image 1' }).fill('320')
+  await page.getByRole('spinbutton', { name: 'Width for image 1' }).press('Enter')
+  await page.waitForFunction(() =>
+    document.querySelector('.cm-content')?.textContent?.includes('width="320"')
+  )
+  await page.getByRole('button', { name: 'Write', exact: true }).click()
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.tiptap .node-image img')?.getAttribute('width') === '320' ||
+      document.querySelector('.tiptap .node-image img')?.style.width === '320px'
+  )
+  const managedImage = page.locator('.tiptap .managed-image').first()
+  await managedImage.click()
+  const imageHandle = managedImage.getByRole('button', { name: 'Resize image from right' })
+  const handleBounds = await imageHandle.boundingBox()
+  assert.ok(handleBounds)
+  await page.mouse.move(
+    handleBounds.x + handleBounds.width / 2,
+    handleBounds.y + handleBounds.height / 2
+  )
+  await page.mouse.down()
+  await page.mouse.move(
+    handleBounds.x + handleBounds.width / 2 - 80,
+    handleBounds.y + handleBounds.height / 2,
+    { steps: 4 }
+  )
+  await page.mouse.up()
+  await page.getByRole('button', { name: 'Markdown', exact: true }).click()
+  assert.match(
+    await page.getByRole('textbox', { name: 'Markdown source' }).innerText(),
+    /width="240"/
+  )
   passed('Public image search inserts a portable HTTPS reference and displays it')
   await app.evaluate(({ dialog }, filePath) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
