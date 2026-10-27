@@ -1,13 +1,93 @@
-import type { FC } from 'react'
-import { ScrollArea } from '@/components/ui'
+import { useDeferredValue, useMemo, useEffect, useState, type FC } from 'react'
+import { ChevronLeft } from 'lucide-react'
+import { useEditorStore } from '@/stores/editorStore'
+import { useUIStore } from '@/stores/uiStore'
+import { getHeadings } from '@/lib/utils/markdown'
+import { navigateToHeading } from '@/lib/editorNavigation'
 
 const Sidebar: FC = () => {
+  const content = useEditorStore(state => state.content)
+  const deferredContent = useDeferredValue(content)
+  const headings = useMemo(() => getHeadings(deferredContent), [deferredContent])
+
+  const [active, setActive] = useState(-1)
+  useEffect(() => {
+    const position = (event: Event): void => {
+      if (!(event instanceof CustomEvent)) {
+        return
+      }
+      const detail: unknown = event.detail
+      if (!detail || typeof detail !== 'object') {
+        return
+      }
+      if ('index' in detail && typeof detail.index === 'number') {
+        setActive(detail.index)
+      } else if ('line' in detail && typeof detail.line === 'number') {
+        const line = detail.line
+        setActive(headings.findLastIndex(heading => heading.line <= line))
+      }
+    }
+    window.addEventListener('marka:position', position)
+    return () => window.removeEventListener('marka:position', position)
+  }, [headings])
   return (
-    <ScrollArea className="h-full w-full">
-      <div className="p-3">
-        <p className="text-xs text-text-muted">No folder open</p>
+    <aside
+      aria-label="Document outline and details"
+      className="outline-panel flex h-full w-56 shrink-0 flex-col border-r border-border bg-surface-raised select-none"
+    >
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
+        <span className="flex items-center gap-2 text-xs font-semibold">
+          Outline
+          <span className="font-normal text-text-muted">{headings.length}</span>
+        </span>
+        <button
+          type="button"
+          aria-label="Hide outline"
+          className="icon-button"
+          onClick={useUIStore.getState().toggleSidebar}
+        >
+          <ChevronLeft size={15} />
+        </button>
       </div>
-    </ScrollArea>
+      <nav aria-label="Document headings" className="min-h-0 flex-1 overflow-auto px-2 py-3">
+        {headings.length === 0 ? (
+          <div className="px-1 py-2 text-xs text-text-muted">
+            <p>
+              {deferredContent.length > 128 * 1024
+                ? 'Outline paused for this large document'
+                : 'No sections yet'}
+            </p>
+            <p className="mt-2 leading-relaxed">
+              {deferredContent.length > 128 * 1024
+                ? 'Use Find in Markdown mode to navigate.'
+                : 'Add a heading with # or the block menu to navigate your document.'}
+            </p>
+          </div>
+        ) : (
+          headings.map(heading => (
+            <button
+              key={`${heading.line}-${heading.index}`}
+              type="button"
+              onClick={() => navigateToHeading(heading.line, heading.index)}
+              className="flex w-full items-center gap-2 rounded-sm py-1.5 pr-2 text-left text-xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary data-[active=true]:bg-surface-overlay data-[active=true]:text-accent"
+              style={{ paddingLeft: 8 + (heading.level - 1) * 12 }}
+              aria-current={active === heading.index ? 'location' : undefined}
+              data-active={active === heading.index}
+              title={heading.text}
+            >
+              <span className="shrink-0 text-[10px] text-text-muted">H{heading.level}</span>
+              <span className="truncate">{heading.text}</span>
+            </button>
+          ))
+        )}
+      </nav>
+      {headings.length === 500 && (
+        <p className="px-4 pb-2 text-xs text-text-muted">Showing the first 500 headings.</p>
+      )}
+      <div className="border-t border-border px-4 py-2 text-[11px] text-text-muted">
+        OfficeFusion
+      </div>
+    </aside>
   )
 }
 

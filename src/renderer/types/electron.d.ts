@@ -1,12 +1,47 @@
+import type { BrowserSource, BrowserSession, BrowserPage, BrowserQuery } from '../../shared/browser'
+import type {
+  ConnectedDocument,
+  ConnectionCapabilities,
+  ConnectionTarget,
+  SshCredentials,
+  FileLocation
+} from '../../shared/connections'
+import type { OpenedFile, DocumentPage } from '../../shared/documents'
+
 export interface ElectronAPI {
-  openFile: () => Promise<{ path: string; content: string } | null>
-  saveFile: (content: string, filePath?: string) => Promise<string | null>
-  readFile: (filePath: string) => Promise<string>
-  watchFile: (filePath: string) => Promise<void>
-  onFileChanged: (callback: (content: string) => void) => () => void
+  loadImage: (path: string, reference: string) => Promise<string>
+  insertImage: (path: string) => Promise<string | null>
+  inspectDocument: (target: FileLocation, reload: boolean) => Promise<ConnectedDocument>
+  startBrowser: (source: BrowserSource, auth?: SshCredentials) => Promise<BrowserSession | null>
+  listFolder: (id: string, query: BrowserQuery) => Promise<BrowserPage>
+  openBrowserFile: (id: string, path: string) => Promise<ConnectedDocument>
+  closeBrowser: (id: string) => Promise<void>
+  connectionCapabilities: () => Promise<ConnectionCapabilities>
+  openConnectedDocument: (
+    target: ConnectionTarget,
+    credentials?: SshCredentials
+  ) => Promise<ConnectedDocument>
+  saveConnectedDocument: (
+    target: FileLocation,
+    content: string,
+    expectedContent: string
+  ) => Promise<string>
+  cancelConnection: () => void
+  chooseConnectionKey: () => Promise<string | null>
+  openFile: () => Promise<OpenedFile | null>
+  saveFile: (content: string, filePath?: string, expectedContent?: string) => Promise<string | null>
+  refreshFile: (path: string) => Promise<OpenedFile>
+  readPage: (handle: string, offset: number) => Promise<DocumentPage>
+  closeReader: (handle: string) => Promise<void>
+  confirmUnsavedChanges: (fileName: string) => Promise<'save' | 'discard' | 'cancel'>
+  confirmClose: () => void
+  onCloseRequested: (callback: () => void) => () => void
   minimize: () => void
   maximize: () => void
   close: () => void
+  exportPdf: (content: string, title?: string) => Promise<string | null>
+  exportHtml: (content: string, title?: string) => Promise<string | null>
+  exportTxt: (textContent: string) => Promise<string | null>
 }
 
 declare global {

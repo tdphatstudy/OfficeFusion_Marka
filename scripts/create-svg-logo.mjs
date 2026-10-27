@@ -1,0 +1,1 @@
+import './gen-icons.mjs'

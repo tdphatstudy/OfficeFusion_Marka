@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { CommandItem } from './slashCommands'
 import { cn } from '@/lib/utils'
 
@@ -14,10 +14,21 @@ interface SlashCommandMenuProps {
 export const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenuProps>(
   ({ items, command }, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0)
+    const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
 
     useEffect(() => {
       setSelectedIndex(0)
     }, [items])
+
+    useEffect(() => {
+      const activeEl = itemRefs.current[selectedIndex]
+      if (activeEl) {
+        activeEl.scrollIntoView({
+          block: 'nearest',
+          behavior: 'smooth'
+        })
+      }
+    }, [selectedIndex])
 
     const selectItem = (index: number): void => {
       const item = items[index]
@@ -59,8 +70,8 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenu
     }
 
     return (
-      <div className="z-50 max-h-80 w-72 overflow-y-auto rounded-xl border border-border bg-surface-overlay/95 p-1.5 shadow-2xl backdrop-blur-md">
-        <div className="px-2 py-1 text-[10px] font-semibold tracking-wider text-text-muted uppercase">
+      <div className="z-50 max-h-80 w-72 overflow-y-auto rounded border border-border bg-surface p-1 shadow-lg">
+        <div className="px-2 py-1 text-xs font-semibold text-text-secondary">
           Blocks & Formatting
         </div>
         <div className="mt-1 space-y-0.5">
@@ -71,19 +82,22 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenu
             return (
               <button
                 key={item.title}
+                ref={el => {
+                  itemRefs.current[index] = el
+                }}
                 type="button"
                 onClick={(): void => selectItem(index)}
                 className={cn(
-                  'flex w-full items-center gap-3 rounded-lg px-2.5 py-1.5 text-left transition-colors',
-                  isSelected ? 'bg-accent text-white' : 'text-text-primary hover:bg-surface-raised'
+                  'flex w-full items-center gap-2 rounded-sm px-2.5 py-1.5 text-left transition-colors',
+                  isSelected
+                    ? 'bg-surface-overlay text-text-primary'
+                    : 'text-text-primary hover:bg-surface-raised'
                 )}
               >
                 <div
                   className={cn(
-                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs',
-                    isSelected
-                      ? 'border-white/20 bg-white/10 text-white'
-                      : 'border-border bg-surface text-text-secondary'
+                    'flex h-7 w-7 shrink-0 items-center justify-center text-xs',
+                    isSelected ? 'text-accent' : 'text-text-secondary'
                   )}
                 >
                   <Icon size={14} />
@@ -93,7 +107,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenu
                   <div
                     className={cn(
                       'mt-0.5 truncate text-[11px]',
-                      isSelected ? 'text-white/80' : 'text-text-muted'
+                      isSelected ? 'text-text-secondary' : 'text-text-muted'
                     )}
                   >
                     {item.description}

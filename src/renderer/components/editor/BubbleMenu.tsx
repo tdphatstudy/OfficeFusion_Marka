@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import { BubbleMenu as TipTapBubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
+import { useEditorState } from '@tiptap/react'
 import {
   Bold,
   Italic,
@@ -20,7 +21,10 @@ interface BubbleMenuProps {
   editor: Editor | null
 }
 
+const bubbleMenuOptions: { placement: 'top' } = { placement: 'top' }
+
 export const BubbleMenu: FC<BubbleMenuProps> = ({ editor }) => {
+  useEditorState({ editor, selector: state => state.transactionNumber })
   if (!editor) {
     return null
   }
@@ -114,7 +118,7 @@ export const BubbleMenu: FC<BubbleMenuProps> = ({ editor }) => {
   return (
     <TipTapBubbleMenu
       editor={editor}
-      options={{ placement: 'top' }}
+      options={bubbleMenuOptions}
       className="flex items-center gap-0.5 rounded-lg border border-border bg-surface-overlay/95 p-1 shadow-xl backdrop-blur-md"
     >
       <div className="flex items-center gap-0.5">
@@ -123,6 +127,8 @@ export const BubbleMenu: FC<BubbleMenuProps> = ({ editor }) => {
           return (
             <button
               key={btn.name}
+              aria-label={btn.name}
+              aria-pressed={btn.isActive}
               type="button"
               onClick={btn.action}
               className={cn(
@@ -146,6 +152,8 @@ export const BubbleMenu: FC<BubbleMenuProps> = ({ editor }) => {
           return (
             <button
               key={btn.name}
+              aria-label={btn.name}
+              aria-pressed={btn.isActive}
               type="button"
               onClick={btn.action}
               className={cn(

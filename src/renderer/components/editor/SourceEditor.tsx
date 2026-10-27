@@ -1,36 +1,339 @@
-import type { ChangeEvent, FC } from 'react'
+import { useEffect, useRef, type FC } from 'react'
+import { Annotation, Compartment, EditorState } from '@codemirror/state'
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+  drawSelection
+} from '@codemirror/view'
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+  undo,
+  redo,
+  undoDepth,
+  redoDepth
+} from '@codemirror/commands'
+import { markdown } from '@codemirror/lang-markdown'
+import {
+  defaultHighlightStyle,
+  syntaxHighlighting,
+  indentUnit,
+  bracketMatching
+} from '@codemirror/language'
+import {
+  search,
+  searchKeymap,
+  openSearchPanel,
+  highlightSelectionMatches
+} from '@codemirror/search'
 import { useEditorStore } from '@/stores/editorStore'
-import { cn } from '@/lib/utils'
+import { oneDark } from '@codemirror/theme-one-dark'
+import { useUIStore } from '@/stores/uiStore'
+import { publishEditorHistory, subscribeEditorHistory } from '@/lib/editorHistory'
+import { registerEditorFlush } from '@/lib/editorSession'
+import { editBudget } from '@/lib/editBudget'
+import { writingFonts } from '../../../shared/fonts'
 
-export const SourceEditor: FC = () => {
-  const { content, setContent, config } = useEditorStore()
+const externalSync = Annotation.define<boolean>()
 
-  const handleChange = (e: ChangeEvent<HTMLTextAreaElement>): void => {
-    setContent(e.target.value)
-  }
+export const SourceEditor: FC<{ active?: boolean }> = ({ active = true }) => {
+  const activeEditor = useRef(active)
+  activeEditor.current = active
+  const host = useRef<HTMLDivElement>(null)
+  const view = useRef<EditorView | null>(null)
+  const preferences = useRef(new Compartment())
+  const language = useRef(new Compartment())
+  const content = useEditorStore(state => state.content)
+  const config = useEditorStore(state => state.config)
+  const documentId = useEditorStore(state => state.documentId)
+  const theme = useUIStore(state => state.theme)
+  const findRequested = useUIStore(state => state.findRequested)
+  const published = useRef(content)
+
+  useEffect(() => {
+    if (!host.current) {
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let pending = false
+    let lastPublish = Date.now()
+    let reducedHighlighting = useEditorStore.getState().content.length > 256 * 1024
+    const flush = (): void => {
+      clearTimeout(timer)
+      if (pending) {
+        pending = false
+        const shouldReduce = instance.state.doc.length > 256 * 1024
+        if (shouldReduce !== reducedHighlighting) {
+          reducedHighlighting = shouldReduce
+          instance.dispatch({
+            effects: language.current.reconfigure(shouldReduce ? [] : markdown())
+          })
+        }
+        published.current = instance.state.doc.toString()
+        useEditorStore.getState().setContent(published.current)
+        lastPublish = Date.now()
+      }
+    }
+    const instance = new EditorView({
+      parent: host.current,
+      state: EditorState.create({
+        doc: useEditorStore.getState().content,
+        extensions: [
+          language.current.of(reducedHighlighting ? [] : markdown()),
+          editBudget(() =>
+            useUIStore
+              .getState()
+              .notify(
+                'Edit rejected: documents must stay within 5 MiB of UTF-8 text. Split the content into smaller files.',
+                true
+              )
+          ),
+          history(),
+          drawSelection(),
+          highlightActiveLine(),
+          bracketMatching(),
+          syntaxHighlighting(defaultHighlightStyle),
+          highlightSelectionMatches(),
+          search({ top: true }),
+          keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+          EditorView.contentAttributes.of({ 'aria-label': 'Markdown source', spellcheck: 'false' }),
+          preferences.current.of([]),
+          EditorView.updateListener.of(update => {
+            if (activeEditor.current && update.selectionSet) {
+              window.dispatchEvent(
+                new CustomEvent('marka:position', {
+                  detail: { line: update.state.doc.lineAt(update.state.selection.main.head).number }
+                })
+              )
+            }
+            if (activeEditor.current) {
+              publishEditorHistory(undoDepth(update.state) > 0, redoDepth(update.state) > 0)
+            }
+            if (
+              update.docChanged &&
+              !update.transactions.some(transaction => transaction.annotation(externalSync))
+            ) {
+              pending = true
+              if (!useEditorStore.getState().isDirty) {
+                useEditorStore.setState({ isDirty: true })
+              }
+              clearTimeout(timer)
+              timer = setTimeout(
+                flush,
+                Math.max(
+                  0,
+                  Math.min(
+                    instance.state.doc.length > 256 * 1024 ? 1000 : 150,
+                    (instance.state.doc.length > 256 * 1024 ? 1800 : 500) -
+                      (Date.now() - lastPublish)
+                  )
+                )
+              )
+            }
+          })
+        ]
+      })
+    })
+    let scrollFrame = 0
+    const scroll = (): void => {
+      if (!activeEditor.current || scrollFrame) {
+        return
+      }
+      scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = 0
+        const block = instance.lineBlockAtHeight(instance.scrollDOM.scrollTop)
+        window.dispatchEvent(
+          new CustomEvent('marka:position', {
+            detail: { line: instance.state.doc.lineAt(block.from).number }
+          })
+        )
+      })
+    }
+    instance.scrollDOM.addEventListener('scroll', scroll, { passive: true })
+    view.current = instance
+    published.current = useEditorStore.getState().content
+    const unregisterFlush = registerEditorFlush(flush)
+    publishEditorHistory(undoDepth(instance.state) > 0, redoDepth(instance.state) > 0)
+    const unsubscribeHistory = subscribeEditorHistory(action => {
+      if (!activeEditor.current) {
+        return
+      }
+      if (action === 'undo') {
+        undo(instance)
+      } else {
+        redo(instance)
+      }
+      instance.focus()
+    })
+    const navigate = (event: Event): void => {
+      if (!activeEditor.current || !(event instanceof CustomEvent)) {
+        return
+      }
+      const detail: unknown = event.detail
+      if (
+        typeof detail !== 'object' ||
+        detail === null ||
+        !('line' in detail) ||
+        typeof detail.line !== 'number'
+      ) {
+        return
+      }
+      const line = instance.state.doc.line(
+        Math.max(1, Math.min(detail.line, instance.state.doc.lines))
+      )
+      instance.dispatch({
+        selection: { anchor: line.from },
+        effects: EditorView.scrollIntoView(line.from, { y: 'center' })
+      })
+      instance.focus()
+    }
+    window.addEventListener('marka:navigate', navigate)
+    const insertImage = (event: Event): void => {
+      if (
+        !activeEditor.current ||
+        !(event instanceof CustomEvent) ||
+        typeof event.detail !== 'string'
+      ) {
+        return
+      }
+      const position = instance.state.selection.main
+      instance.dispatch({
+        changes: { from: position.from, to: position.to, insert: `![Image](${event.detail})` }
+      })
+      instance.focus()
+    }
+    window.addEventListener('marka:insert-image', insertImage)
+    const locateImage = (event: Event): void => {
+      if (
+        !activeEditor.current ||
+        !(event instanceof CustomEvent) ||
+        typeof event.detail?.from !== 'number'
+      ) {
+        return
+      }
+      const at = Math.min(instance.state.doc.length, Math.max(0, event.detail.from))
+      instance.dispatch({
+        selection: { anchor: at },
+        effects: EditorView.scrollIntoView(at, { y: 'center' })
+      })
+      instance.focus()
+    }
+    window.addEventListener('marka:locate-image', locateImage)
+    return () => {
+      clearTimeout(timer)
+      unregisterFlush()
+      window.removeEventListener('marka:navigate', navigate)
+      window.removeEventListener('marka:insert-image', insertImage)
+      window.removeEventListener('marka:locate-image', locateImage)
+      unsubscribeHistory()
+      cancelAnimationFrame(scrollFrame)
+      instance.scrollDOM.removeEventListener('scroll', scroll)
+      instance.destroy()
+      view.current = null
+      publishEditorHistory(false, false)
+    }
+  }, [documentId])
+
+  useEffect(() => {
+    if (active && findRequested && view.current) {
+      openSearchPanel(view.current)
+      useUIStore.getState().setFindRequested(false)
+    }
+  }, [findRequested, documentId, active])
+
+  useEffect(() => {
+    const instance = view.current
+    if (active && instance) {
+      publishEditorHistory(undoDepth(instance.state) > 0, redoDepth(instance.state) > 0)
+    }
+  }, [active])
+
+  useEffect(() => {
+    const instance = view.current
+    if (active && instance && published.current !== content) {
+      published.current = content
+      instance.dispatch({
+        changes: { from: 0, to: instance.state.doc.length, insert: content },
+        annotations: externalSync.of(true)
+      })
+    }
+  }, [content, active])
+
+  useEffect(() => {
+    const applyPreferences = (): void => {
+      const isDark =
+        theme === 'dark' ||
+        (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      view.current?.dispatch({
+        effects: preferences.current.reconfigure([
+          ...(isDark ? [oneDark] : []),
+          ...(config.showLineNumbers ? [lineNumbers()] : []),
+          ...(config.wordWrap ? [EditorView.lineWrapping] : []),
+          EditorState.tabSize.of(config.tabSize),
+          indentUnit.of(' '.repeat(config.tabSize)),
+          EditorView.theme(
+            {
+              '&': {
+                height: '100%',
+                color: 'hsl(var(--color-text-primary))',
+                backgroundColor: 'hsl(var(--color-surface))'
+              },
+              '.cm-scroller': {
+                overflow: 'auto',
+                fontFamily: writingFonts[config.fontFamily],
+                fontSize: `${config.fontSize}px`,
+                lineHeight: `${config.lineHeight}`
+              },
+              '.cm-content': { padding: '20px 0' },
+              '.cm-line': { padding: '0 20px' },
+              '.cm-gutters': {
+                backgroundColor: 'hsl(var(--color-surface-raised))',
+                color: 'hsl(var(--color-text-muted))',
+                border: 'none'
+              },
+              '.cm-activeLine, .cm-activeLineGutter': {
+                backgroundColor: 'hsl(var(--color-surface-overlay) / 0.6)'
+              },
+              '.cm-cursor': { borderLeftColor: 'hsl(var(--color-accent))' },
+              '.cm-panels': {
+                backgroundColor: 'hsl(var(--color-surface-raised))',
+                color: 'hsl(var(--color-text-primary))'
+              },
+              '.cm-textfield, .cm-button': {
+                background: 'hsl(var(--color-surface))',
+                color: 'hsl(var(--color-text-primary))',
+                border: '1px solid hsl(var(--color-border))',
+                borderRadius: '4px'
+              },
+              '&.cm-focused': { outline: 'none' }
+            },
+            { dark: isDark }
+          )
+        ])
+      })
+    }
+    applyPreferences()
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener('change', applyPreferences)
+    return () => {
+      media.removeEventListener('change', applyPreferences)
+    }
+  }, [config, theme, documentId])
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden bg-surface p-4">
-      <div
-        className={cn(
-          'flex h-full w-full flex-1 flex-col rounded-lg border border-border bg-surface-raised p-4 transition-all',
-          config.fullWidth ? 'max-w-full' : 'mx-auto max-w-4xl'
-        )}
-      >
-        <div className="mb-2 flex items-center justify-between border-b border-border pb-2 text-xs text-text-muted">
-          <span className="font-mono">Raw Markdown Source</span>
-          <span>UTF-8</span>
-        </div>
-        <textarea
-          value={content}
-          onChange={handleChange}
-          spellCheck={false}
-          className={cn(
-            'flex-1 resize-none bg-transparent font-mono text-sm leading-relaxed text-text-primary focus:outline-none',
-            config.wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'
-          )}
-        />
+    <section
+      aria-label="Source editor"
+      className="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface"
+    >
+      <div className="pane-heading">
+        <span>Markdown source</span>
+        <span>UTF-8</span>
       </div>
-    </div>
+      <div ref={host} className="min-h-0 flex-1 overflow-hidden" />
+    </section>
   )
 }

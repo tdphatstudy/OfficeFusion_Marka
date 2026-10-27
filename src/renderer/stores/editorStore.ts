@@ -1,83 +1,104 @@
 import { create } from 'zustand'
-import { immer } from 'zustand/middleware/immer'
 import { persist } from 'zustand/middleware'
+import { readDraft } from '@/lib/draft'
+import { preferenceStorage } from '@/lib/preferenceStorage'
+import { defaultConfig } from '@/lib/preferences'
 import type { EditorConfig, ViewMode } from '@/types/editor'
+import type { FileLocation } from '../../shared/connections'
+import type { PagedDocument } from '../../shared/documents'
 
 interface EditorState {
   content: string
+  savedContent: string
+  documentId: number
   filePath: string | null
+  fileLocation: FileLocation | null
   fileName: string
   isDirty: boolean
+  recovered: boolean
+  pagedDocument: PagedDocument | null
   viewMode: ViewMode
   config: EditorConfig
   setContent: (content: string) => void
-  openFile: (path: string, content: string) => void
-  markSaved: (path: string) => void
+  openFile: (path: string, content: string, location?: FileLocation, paged?: PagedDocument) => void
+  markSaved: (path: string, content: string, documentId: number) => void
   setViewMode: (mode: ViewMode) => void
   toggleFullWidth: () => void
   updateConfig: (patch: Partial<EditorConfig>) => void
-  newFile: () => void
+  newFile: (content?: string, name?: string) => void
+  dismissRecovery: () => void
 }
+
+const welcome =
+  '# Welcome to Marka\n\nMarkdown editor by OfficeFusion.\n\nOpen a document from the File menu, or start writing here.\n\nUse Markdown to edit source, Split to preview, and Commands to find available actions.\n'
+const draft = readDraft()
 
 export const useEditorStore = create<EditorState>()(
   persist(
-    immer(set => ({
-      content:
-        '# Welcome to Marka\n\nExperience rich Notion-style editing with pure Markdown fidelity.\n\nType `/` anywhere to insert blocks, tables, callouts, or formulas.\n',
-      filePath: null,
-      fileName: 'Untitled.md',
-      isDirty: false,
+    set => ({
+      content: draft?.content ?? welcome,
+      savedContent: draft?.savedContent ?? welcome,
+      documentId: 0,
+      filePath: draft?.filePath ?? null,
+      fileLocation:
+        draft?.location ?? (draft?.filePath ? { kind: 'local', path: draft.filePath } : null),
+      fileName: draft?.filePath?.split(/[\\/]/).pop() ?? 'Untitled.md',
+      isDirty: draft !== null,
+      recovered: draft !== null,
+      pagedDocument: null,
       viewMode: 'rich',
-      config: {
-        fontSize: 15,
-        lineHeight: 1.65,
-        wordWrap: true,
-        showLineNumbers: true,
-        tabSize: 2,
-        theme: 'system',
-        fontFamily: 'sans',
-        fullWidth: false
-      },
-      setContent: content =>
+      config: { ...defaultConfig },
+      setContent: content => set(state => ({ content, isDirty: content !== state.savedContent })),
+      openFile: (path, content, location, paged) =>
+        set(state => ({
+          documentId: state.documentId + 1,
+          filePath: path,
+          fileLocation: location ?? { kind: 'local', path },
+          fileName: path.split(/[\\/]/).pop() ?? 'Untitled.md',
+          content,
+          savedContent: content,
+          isDirty: false,
+          recovered: false,
+          pagedDocument: paged ?? null
+        })),
+      markSaved: (path, content, documentId) =>
         set(state => {
-          state.content = content
-          state.isDirty = true
+          if (state.documentId !== documentId) {
+            return state
+          }
+          return {
+            filePath: path,
+            fileLocation:
+              state.fileLocation?.kind === 'ssh' && path === state.filePath
+                ? state.fileLocation
+                : { kind: 'local', path },
+            fileName: path.split(/[\\/]/).pop() ?? 'Untitled.md',
+            savedContent: content,
+            isDirty: state.content !== content,
+            recovered: false
+          }
         }),
-      openFile: (path, content) =>
-        set(state => {
-          state.filePath = path
-          state.fileName = path.split(/[\\/]/).pop() ?? 'Untitled.md'
-          state.content = content
-          state.isDirty = false
-        }),
-      markSaved: path =>
-        set(state => {
-          state.filePath = path
-          state.fileName = path.split(/[\\/]/).pop() ?? 'Untitled.md'
-          state.isDirty = false
-        }),
-      setViewMode: mode =>
-        set(state => {
-          state.viewMode = mode
-        }),
+      setViewMode: viewMode => set({ viewMode }),
       toggleFullWidth: () =>
-        set(state => {
-          state.config.fullWidth = !state.config.fullWidth
-        }),
-      updateConfig: patch =>
-        set(state => {
-          Object.assign(state.config, patch)
-        }),
-      newFile: () =>
-        set(state => {
-          state.content = ''
-          state.filePath = null
-          state.fileName = 'Untitled.md'
-          state.isDirty = false
-        })
-    })),
+        set(state => ({ config: { ...state.config, fullWidth: !state.config.fullWidth } })),
+      updateConfig: patch => set(state => ({ config: { ...state.config, ...patch } })),
+      newFile: (content = '', name = 'Untitled.md') =>
+        set(state => ({
+          documentId: state.documentId + 1,
+          content,
+          savedContent: '',
+          filePath: null,
+          fileLocation: null,
+          fileName: name,
+          isDirty: content !== '',
+          recovered: false,
+          pagedDocument: null
+        })),
+      dismissRecovery: () => set({ recovered: false })
+    }),
     {
       name: 'marka-editor',
+      storage: preferenceStorage,
       partialize: state => ({ config: state.config, viewMode: state.viewMode })
     }
   )
