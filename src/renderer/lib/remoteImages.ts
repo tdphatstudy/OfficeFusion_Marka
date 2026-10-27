@@ -21,6 +21,15 @@ export interface DocumentImage {
   to: number
 }
 
+export class ImageSearchError extends Error {
+  constructor(
+    source: string,
+    public readonly status: number
+  ) {
+    super(`${source} returned ${status}.`)
+  }
+}
+
 const imageMarkdownParser = unified().use(remarkParse).use(remarkGfm)
 
 export function resizeImageMarkup(
@@ -248,15 +257,11 @@ export async function searchOpenverse(
   }
   const url = new URL('https://api.openverse.org/v1/images/')
   url.searchParams.set('q', term)
-  url.searchParams.set('page_size', '30')
+  url.searchParams.set('page_size', '20')
   url.searchParams.set('extension', gifs ? 'gif' : 'jpg,jpeg,png,webp,gif')
   const response = await fetch(url, { signal, referrerPolicy: 'no-referrer' })
   if (!response.ok) {
-    throw new Error(
-      response.status === 429
-        ? 'Openverse is rate limiting searches. Try again shortly.'
-        : `Openverse returned ${response.status}.`
-    )
+    throw new ImageSearchError('Openverse', response.status)
   }
   return openverseImages(await response.json())
 }

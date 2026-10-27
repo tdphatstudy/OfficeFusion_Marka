@@ -9,12 +9,14 @@ import { FileAccess, readTextRange } from '../src/main/files'
 import { findRichText } from '../src/renderer/lib/richSearch'
 import { searchRanges } from '../src/renderer/lib/rangeSearch'
 import {
+  ImageSearchError,
   commonsImages,
   documentImages,
   imageUrl,
   imgflipMemes,
   openverseImages,
-  resizeImageMarkup
+  resizeImageMarkup,
+  searchOpenverse
 } from '../src/renderer/lib/remoteImages'
 
 test('public image results keep only safe direct image URLs and source pages', () => {
@@ -64,6 +66,26 @@ test('Openverse results filter unsupported formats and unsafe URLs', () => {
     }).map(item => item.title),
     ['Trend']
   )
+})
+
+test('anonymous Openverse search stays within the 20-result limit and identifies 401', async () => {
+  const originalFetch = globalThis.fetch
+  try {
+    globalThis.fetch = (async input => {
+      const url = new URL(String(input))
+      assert.equal(url.searchParams.get('page_size'), '20')
+      assert.equal(url.searchParams.get('q'), 'labubu')
+      return new Response(JSON.stringify({ results: [] }), { status: 200 })
+    }) as typeof fetch
+    assert.deepEqual(await searchOpenverse('labubu', false), [])
+    globalThis.fetch = (async () => new Response('', { status: 401 })) as typeof fetch
+    await assert.rejects(
+      searchOpenverse('labubu', false),
+      cause => cause instanceof ImageSearchError && cause.status === 401
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })
 
 test('keyless popular memes reject videos and untrusted hosts', () => {

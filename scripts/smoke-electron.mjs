@@ -258,21 +258,48 @@ try {
   await writeFile(image, png)
   await page.route('https://api.openverse.org/v1/images/?**', route =>
     route.fulfill({
+      status: new URL(route.request().url()).searchParams.get('q') === 'fallback' ? 401 : 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body:
+        new URL(route.request().url()).searchParams.get('q') === 'fallback'
+          ? JSON.stringify({ detail: 'Anonymous limit' })
+          : JSON.stringify({
+              results: [
+                {
+                  title: 'Trend Sample.png',
+                  filetype: 'png',
+                  url: 'https://upload.wikimedia.org/sample.png',
+                  thumbnail: 'https://upload.wikimedia.org/thumb.png',
+                  foreign_landing_url: 'https://commons.wikimedia.org/wiki/File:Sample.png',
+                  creator: 'Fixture',
+                  license: 'cc0'
+                }
+              ]
+            })
+    })
+  )
+  await page.route('https://commons.wikimedia.org/w/api.php?**', route =>
+    route.fulfill({
       status: 200,
       contentType: 'application/json',
       headers: { 'access-control-allow-origin': '*' },
       body: JSON.stringify({
-        results: [
-          {
-            title: 'Trend Sample.png',
-            filetype: 'png',
-            url: 'https://upload.wikimedia.org/sample.png',
-            thumbnail: 'https://upload.wikimedia.org/thumb.png',
-            foreign_landing_url: 'https://commons.wikimedia.org/wiki/File:Sample.png',
-            creator: 'Fixture',
-            license: 'cc0'
-          }
-        ]
+        query: {
+          pages: [
+            {
+              title: 'File:Fallback.png',
+              imageinfo: [
+                {
+                  mime: 'image/png',
+                  url: 'https://upload.wikimedia.org/fallback.png',
+                  thumburl: 'https://upload.wikimedia.org/thumb.png',
+                  descriptionurl: 'https://commons.wikimedia.org/wiki/File:Fallback.png'
+                }
+              ]
+            }
+          ]
+        }
       })
     })
   )
@@ -304,6 +331,18 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.cm-content')?.textContent?.includes('upload.wikimedia.org/sample.png')
   )
+  await page.getByRole('textbox', { name: 'Search public images' }).fill('fallback')
+  await page
+    .getByRole('status')
+    .getByText('Openverse is unavailable. Showing Wikimedia Commons results instead.')
+    .waitFor()
+  await page.getByTitle('Select Fallback.png').waitFor()
+  const expectedUnauthorized = errors.findIndex(
+    message => message === 'Failed to load resource: the server responded with a status of 401 (Unauthorized)'
+  )
+  assert.ok(expectedUnauthorized >= 0)
+  errors.splice(expectedUnauthorized, 1)
+  passed('Anonymous Openverse 401 falls back to Wikimedia Commons')
   await page.getByRole('button', { name: 'Split', exact: true }).click()
   await page.waitForFunction(() =>
     [...document.querySelectorAll('.markdown-preview img')].some(
@@ -368,11 +407,23 @@ try {
   assert.deepEqual(await readFile(resolve(root, imageReference)), png)
   await page.getByRole('button', { name: 'Split', exact: true }).click()
   await page.waitForFunction(() => {
-    return [...document.querySelectorAll('.markdown-preview img')].some(image => image instanceof HTMLImageElement && image.getAttribute('data-markdown-src')?.includes('assets/') && image.complete && image.naturalWidth === 1)
+    return [...document.querySelectorAll('.markdown-preview img')].some(
+      image =>
+        image instanceof HTMLImageElement &&
+        image.getAttribute('data-markdown-src')?.includes('assets/') &&
+        image.complete &&
+        image.naturalWidth === 1
+    )
   })
   await page.getByRole('button', { name: 'Write', exact: true }).click()
   await page.waitForFunction(() => {
-    return [...document.querySelectorAll('.tiptap .node-image img')].some(image => image instanceof HTMLImageElement && image.src.startsWith('data:') && image.complete && image.naturalWidth === 1)
+    return [...document.querySelectorAll('.tiptap .node-image img')].some(
+      image =>
+        image instanceof HTMLImageElement &&
+        image.src.startsWith('data:') &&
+        image.complete &&
+        image.naturalWidth === 1
+    )
   })
   passed('Local image picker copies an image and displays it in Split and Write')
   await page.getByRole('button', { name: 'Markdown', exact: true }).click()
@@ -508,7 +559,10 @@ try {
   await page.getByRole('spinbutton', { name: 'Columns' }).fill('4')
   await page.screenshot({ animations: 'disabled', path: resolve(root, 'table-picker.png') })
   await page.getByRole('button', { name: 'Insert 2 × 4 table' }).click()
-  const customTable = page.locator('.tiptap table').filter({ has: page.locator('tr:first-child > :nth-child(4)') }).last()
+  const customTable = page
+    .locator('.tiptap table')
+    .filter({ has: page.locator('tr:first-child > :nth-child(4)') })
+    .last()
   assert.equal(await customTable.locator('tr').count(), 2)
   assert.equal(await customTable.locator('tr').first().locator('th,td').count(), 4)
   await customTable.locator('tr').first().locator('th').first().scrollIntoViewIfNeeded()
@@ -532,7 +586,7 @@ try {
   await page.getByRole('button', { name: 'Write', exact: true }).click()
   assert.ok(
     (
-      await page.locator('.tiptap table').last().locator('tr').first().getAttribute('style')
+      await customTable.locator('tr').first().getAttribute('style')
     )?.includes('height:')
   )
   passed('Custom table dimensions and row-height drag survive Markdown round trip')

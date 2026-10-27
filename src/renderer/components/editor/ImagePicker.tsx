@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FC, type PointerEvent } from
 import { Image as ImageIcon, Search, X } from 'lucide-react'
 import { chooseLocalImage, loadLocalImage } from '@/lib/localImages'
 import {
+  ImageSearchError,
   documentImages,
   imageUrl,
   resizeImageMarkup,
@@ -80,6 +81,7 @@ export const ImagePicker: FC = () => {
   const [selected, setSelected] = useState<RemoteImageResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [warning, setWarning] = useState('')
   const content = useEditorStore(state => state.content)
   const images = useMemo(
     () => (open && tab === 'document' ? documentImages(content) : []),
@@ -96,17 +98,31 @@ export const ImagePicker: FC = () => {
     if (!open || tab !== 'search' || (mode !== 'memes' && !query.trim())) {
       setBusy(false)
       setError('')
+      setWarning('')
       return
     }
     const controller = new AbortController()
     setBusy(true)
     setError('')
+    setWarning('')
     const timer = setTimeout(() => {
       let request: Promise<RemoteImageResult[]>
       if (mode === 'memes') {
         request = searchTopMemes(query, controller.signal)
       } else if (provider === 'Openverse') {
-        request = searchOpenverse(query, mode === 'gifs', controller.signal)
+        request = searchOpenverse(query, mode === 'gifs', controller.signal).catch(async cause => {
+          if (!(cause instanceof ImageSearchError) || ![401, 429].includes(cause.status)) {
+            throw cause
+          }
+          const fallback = await searchCommons(
+            mode === 'gifs' ? `${query} filemime:"image/gif"` : query,
+            controller.signal
+          )
+          if (!controller.signal.aborted) {
+            setWarning('Openverse is unavailable. Showing Wikimedia Commons results instead.')
+          }
+          return fallback
+        })
       } else {
         request = searchCommons(
           mode === 'gifs' ? `${query} filemime:"image/gif"` : query,
@@ -384,6 +400,11 @@ export const ImagePicker: FC = () => {
                 <p className="text-xs text-text-secondary">
                   Popular meme templates from Imgflip, free to browse without an API key. Search
                   filters this list.
+                </p>
+              )}
+              {warning && (
+                <p role="status" className="text-xs text-text-secondary">
+                  {warning}
                 </p>
               )}
               <div
